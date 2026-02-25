@@ -11,14 +11,23 @@ import {
   MoreHorizontal
 } from "lucide-react";
 import { Customer } from "../types";
-import { motion } from "motion/react";
+import { motion, AnimatePresence } from "motion/react";
 
 export default function Customers() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [newCustomer, setNewCustomer] = useState({
+    name: "",
+    email: "",
+    phone: "",
+    address: "",
+    age: "",
+    gender: "Other"
+  });
 
-  useEffect(() => {
+  const fetchCustomers = () => {
     fetch("/api/customers", {
       headers: { Authorization: `Bearer ${localStorage.getItem("visionx_token")}` }
     })
@@ -27,7 +36,32 @@ export default function Customers() {
       setCustomers(data);
       setLoading(false);
     });
+  };
+
+  useEffect(() => {
+    fetchCustomers();
   }, []);
+
+  const handleAddCustomer = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const response = await fetch("/api/customers", {
+        method: "POST",
+        headers: { 
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${localStorage.getItem("visionx_token")}` 
+        },
+        body: JSON.stringify(newCustomer)
+      });
+      if (response.ok) {
+        setIsAddModalOpen(false);
+        setNewCustomer({ name: "", email: "", phone: "", address: "", age: "", gender: "Other" });
+        fetchCustomers();
+      }
+    } catch (err) {
+      console.error("Failed to add customer:", err);
+    }
+  };
 
   const filteredCustomers = customers.filter(c => 
     c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -66,12 +100,115 @@ export default function Customers() {
             <Download className="w-5 h-5" />
             Export CSV
           </button>
-          <button className="gradient-bg px-6 py-3 rounded-xl font-bold flex items-center gap-2 shadow-lg shadow-cyan-500/20">
+          <button 
+            onClick={() => setIsAddModalOpen(true)}
+            className="gradient-bg px-6 py-3 rounded-xl font-bold flex items-center gap-2 shadow-lg shadow-cyan-500/20"
+          >
             <Plus className="w-5 h-5" />
             New Customer
           </button>
         </div>
       </div>
+
+      <AnimatePresence>
+        {isAddModalOpen && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsAddModalOpen(false)}
+              className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm"
+            />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="relative w-full max-w-lg glass-card p-8 space-y-6"
+            >
+              <h2 className="text-2xl font-bold">Add New Customer</h2>
+              <form onSubmit={handleAddCustomer} className="space-y-4">
+                <div className="space-y-2">
+                  <label className="text-xs font-bold uppercase text-slate-500">Full Name</label>
+                  <input 
+                    required
+                    type="text" 
+                    value={newCustomer.name}
+                    onChange={(e) => setNewCustomer({ ...newCustomer, name: e.target.value })}
+                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2 focus:ring-2 focus:ring-cyan-500/50 outline-none"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold uppercase text-slate-500">Age</label>
+                    <input 
+                      type="number" 
+                      value={newCustomer.age}
+                      onChange={(e) => setNewCustomer({ ...newCustomer, age: e.target.value })}
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2 focus:ring-2 focus:ring-cyan-500/50 outline-none"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold uppercase text-slate-500">Gender</label>
+                    <select 
+                      value={newCustomer.gender}
+                      onChange={(e) => setNewCustomer({ ...newCustomer, gender: e.target.value })}
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2 focus:ring-2 focus:ring-cyan-500/50 outline-none"
+                    >
+                      <option value="Male">Male</option>
+                      <option value="Female">Female</option>
+                      <option value="Other">Other</option>
+                    </select>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold uppercase text-slate-500">Phone</label>
+                    <input 
+                      type="tel" 
+                      value={newCustomer.phone}
+                      onChange={(e) => setNewCustomer({ ...newCustomer, phone: e.target.value })}
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2 focus:ring-2 focus:ring-cyan-500/50 outline-none"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold uppercase text-slate-500">Email</label>
+                    <input 
+                      type="email" 
+                      value={newCustomer.email}
+                      onChange={(e) => setNewCustomer({ ...newCustomer, email: e.target.value })}
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2 focus:ring-2 focus:ring-cyan-500/50 outline-none"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-xs font-bold uppercase text-slate-500">Address</label>
+                  <textarea 
+                    value={newCustomer.address}
+                    onChange={(e) => setNewCustomer({ ...newCustomer, address: e.target.value })}
+                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2 focus:ring-2 focus:ring-cyan-500/50 outline-none h-20 resize-none"
+                  />
+                </div>
+                <div className="flex gap-3 pt-4">
+                  <button 
+                    type="button"
+                    onClick={() => setIsAddModalOpen(false)}
+                    className="flex-1 py-3 glass rounded-xl font-bold hover:bg-white/10 transition-all"
+                  >
+                    Cancel
+                  </button>
+                  <button 
+                    type="submit"
+                    className="flex-1 py-3 gradient-bg rounded-xl font-bold shadow-lg shadow-cyan-500/20"
+                  >
+                    Save Customer
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       <div className="glass-card">
         <div className="p-6 border-b border-white/10">

@@ -22,7 +22,8 @@ db.exec(`
     name TEXT NOT NULL,
     email TEXT UNIQUE NOT NULL,
     password TEXT NOT NULL,
-    role TEXT DEFAULT 'customer'
+    role TEXT DEFAULT 'staff', -- 'admin', 'doctor', 'staff'
+    branch_id INTEGER DEFAULT 1
   );
 
   CREATE TABLE IF NOT EXISTS customers (
@@ -31,7 +32,18 @@ db.exec(`
     email TEXT,
     phone TEXT,
     address TEXT,
+    age INTEGER,
+    gender TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE TABLE IF NOT EXISTS activity_logs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER,
+    action TEXT,
+    details TEXT,
+    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id)
   );
 
   CREATE TABLE IF NOT EXISTS inventory (
@@ -60,15 +72,6 @@ db.exec(`
     date DATETIME DEFAULT CURRENT_TIMESTAMP,
     results TEXT, -- JSON string
     image_url TEXT,
-    FOREIGN KEY (customer_id) REFERENCES customers(id)
-  );
-
-  CREATE TABLE IF NOT EXISTS sales (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    customer_id INTEGER NOT NULL,
-    total REAL NOT NULL,
-    items TEXT, -- JSON string
-    date DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (customer_id) REFERENCES customers(id)
   );
 `);
@@ -103,12 +106,12 @@ if (invCount.count === 0) {
 const custCount = db.prepare("SELECT COUNT(*) as count FROM customers").get() as any;
 if (custCount.count === 0) {
   const customers = [
-    { name: 'John Doe', email: 'john@example.com', phone: '+1 555 0123', address: '456 Oak Ave, Springfield' },
-    { name: 'Jane Smith', email: 'jane@example.com', phone: '+1 555 0456', address: '789 Pine St, Metropolis' },
-    { name: 'Robert Brown', email: 'robert@example.com', phone: '+1 555 0789', address: '101 Maple Ln, Gotham' },
+    { name: 'John Doe', email: 'john@example.com', phone: '+1 555 0123', address: '456 Oak Ave, Springfield', age: 25, gender: 'Male' },
+    { name: 'Jane Smith', email: 'jane@example.com', phone: '+1 555 0456', address: '789 Pine St, Metropolis', age: 34, gender: 'Female' },
+    { name: 'Robert Brown', email: 'robert@example.com', phone: '+1 555 0789', address: '101 Maple Ln, Gotham', age: 62, gender: 'Male' },
   ];
-  const stmt = db.prepare("INSERT INTO customers (name, email, phone, address) VALUES (?, ?, ?, ?)");
-  customers.forEach(c => stmt.run(c.name, c.email, c.phone, c.address));
+  const stmt = db.prepare("INSERT INTO customers (name, email, phone, address, age, gender) VALUES (?, ?, ?, ?, ?, ?)");
+  customers.forEach(c => stmt.run(c.name, c.email, c.phone, c.address, c.age, c.gender));
 }
 
 // Seed Appointments if empty
@@ -121,17 +124,6 @@ if (apptCount.count === 0) {
   ];
   const stmt = db.prepare("INSERT INTO appointments (customer_id, date, time, status, notes) VALUES (?, ?, ?, ?, ?)");
   appointments.forEach(a => stmt.run(a.customer_id, a.date, a.time, a.status, a.notes));
-}
-
-// Seed Sales if empty
-const salesCount = db.prepare("SELECT COUNT(*) as count FROM sales").get() as any;
-if (salesCount.count === 0) {
-  const sales = [
-    { customer_id: 1, total: 235, items: JSON.stringify([{ id: 1, brand: 'Ray-Ban', price: 150 }, { id: 4, brand: 'Essilor', price: 85 }]) },
-    { customer_id: 2, total: 225, items: JSON.stringify([{ id: 2, brand: 'Oakley', price: 130 }, { id: 5, brand: 'Zeiss', price: 95 }]) },
-  ];
-  const stmt = db.prepare("INSERT INTO sales (customer_id, total, items, date) VALUES (?, ?, ?, date('now', '-1 day'))");
-  sales.forEach(s => stmt.run(s.customer_id, s.total, s.items));
 }
 
 const app = express();
@@ -182,11 +174,54 @@ app.get("/api/customers", authenticate, (req, res) => {
 });
 
 app.post("/api/customers", authenticate, (req, res) => {
-  const { name, email, phone, address } = req.body;
-  const result = db.prepare("INSERT INTO customers (name, email, phone, address) VALUES (?, ?, ?, ?)").run(
-    name, email, phone, address
+  const { name, email, phone, address, age, gender } = req.body;
+  const result = db.prepare("INSERT INTO customers (name, email, phone, address, age, gender) VALUES (?, ?, ?, ?, ?, ?)").run(
+    name, email, phone, address, age, gender
   );
   res.json({ id: result.lastInsertRowid });
+});
+
+// Analytics & Reports
+app.get("/api/analytics/eye-conditions", authenticate, (req, res) => {
+  const tests = db.prepare("SELECT results FROM eye_tests").all();
+  const stats = { myopia: 0, hyperopia: 0, astigmatism: 0, normal: 0 };
+  tests.forEach((t: any) => {
+    const results = JSON.parse(t.results);
+    const summary = (results.summary || "").toLowerCase();
+    if (summary.includes("myopia")) stats.myopia++;
+    else if (summary.includes("hyperopia")) stats.hyperopia++;
+    else if (summary.includes("astigmatism")) stats.astigmatism++;
+    else stats.normal++;
+  });
+  res.json(stats);
+});
+
+app.get("/api/analytics/demographics", authenticate, (req, res) => {
+  const genderStats = db.prepare("SELECT gender, COUNT(*) as count FROM customers GROUP BY gender").all();
+  const ageStats = db.prepare(`
+    SELECT 
+      CASE 
+        WHEN age < 18 THEN '0-17'
+        WHEN age BETWEEN 18 AND 35 THEN '18-35'
+        WHEN age BETWEEN 36 AND 60 THEN '36-60'
+        ELSE '60+'
+      END as age_group,
+      COUNT(*) as count 
+    FROM customers 
+    GROUP BY age_group
+  `).all();
+  res.json({ gender: genderStats, age: ageStats });
+});
+
+app.get("/api/activity-logs", authenticate, (req, res) => {
+  const logs = db.prepare(`
+    SELECT l.*, u.name as user_name 
+    FROM activity_logs l 
+    JOIN users u ON l.user_id = u.id 
+    ORDER BY l.timestamp DESC 
+    LIMIT 100
+  `).all();
+  res.json(logs);
 });
 
 // Inventory
@@ -247,46 +282,20 @@ app.post("/api/customers/test", authenticate, (req, res) => {
   res.json({ id: result.lastInsertRowid });
 });
 
-// Billing
-app.post("/api/billing", authenticate, (req, res) => {
-  const { customer_id, total, items } = req.body;
-  const result = db.prepare("INSERT INTO sales (customer_id, total, items) VALUES (?, ?, ?)").run(
-    customer_id, total, JSON.stringify(items)
-  );
-
-  // Deduct stock
-  items.forEach((item: any) => {
-    db.prepare("UPDATE inventory SET stock = stock - 1 WHERE id = ?").run(item.id);
-  });
-
-  res.json({ id: result.lastInsertRowid });
-});
-
 // Analytics
 app.get("/api/analytics", authenticate, (req, res) => {
   const totalCustomers = db.prepare("SELECT COUNT(*) as count FROM customers").get() as any;
-  const totalRevenue = db.prepare("SELECT SUM(total) as total FROM sales").get() as any;
   const lowStock = db.prepare("SELECT COUNT(*) as count FROM inventory WHERE stock < 5").get() as any;
   const appointmentsToday = db.prepare("SELECT COUNT(*) as count FROM appointments WHERE date = date('now')").get() as any;
   const aiTests = db.prepare("SELECT COUNT(*) as count FROM eye_tests").get() as any;
 
-  const salesHistory = db.prepare(`
-    SELECT date(date) as day, SUM(total) as revenue 
-    FROM sales 
-    GROUP BY day 
-    ORDER BY day DESC 
-    LIMIT 7
-  `).all();
-
   res.json({
     stats: {
       totalCustomers: totalCustomers.count,
-      totalRevenue: totalRevenue.total || 0,
       lowStock: lowStock.count,
       appointmentsToday: appointmentsToday.count,
       aiTests: aiTests.count
-    },
-    salesHistory
+    }
   });
 });
 

@@ -8,8 +8,7 @@ import Customers from "./pages/Customers";
 import Inventory from "./pages/Inventory";
 import Appointments from "./pages/Appointments";
 import AIEyeTest from "./pages/AIEyeTest";
-import Billing from "./pages/Billing";
-import Shop from "./pages/Shop";
+import Analytics from "./pages/Analytics";
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -54,12 +53,11 @@ export default function App() {
         
         <Route element={user ? <Layout user={user} onLogout={handleLogout} /> : <Navigate to="/login" />}>
           <Route path="/" element={<Dashboard />} />
-          <Route path="/shop" element={<Shop />} />
           <Route path="/customers" element={<Customers />} />
           <Route path="/inventory" element={<Inventory />} />
           <Route path="/appointments" element={<Appointments />} />
           <Route path="/ai-test" element={<AIEyeTest />} />
-          <Route path="/billing" element={<Billing />} />
+          <Route path="/analytics" element={<Analytics />} />
         </Route>
 
         <Route path="*" element={<Navigate to="/" />} />

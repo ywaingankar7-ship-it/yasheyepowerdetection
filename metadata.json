@@ -1,5 +1,5 @@
 {
   "name": "VisionX AI Optical ERP",
-  "description": "A premium AI-powered Optical Shop & Eye Diagnosis Management System with inventory, billing, and automated eye test analysis.",
+  "description": "A premium AI-powered Optical Shop & Eye Diagnosis Management System with inventory and automated eye test analysis.",
   "requestFramePermissions": ["camera"]
 }

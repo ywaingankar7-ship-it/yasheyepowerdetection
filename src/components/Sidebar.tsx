@@ -6,10 +6,8 @@ import {
   Package, 
   Calendar, 
   Eye, 
-  Receipt, 
   LogOut,
-  ChevronRight,
-  ShoppingBag
+  ChevronRight
 } from "lucide-react";
 import { User } from "../types";
 import { motion } from "motion/react";
@@ -21,12 +19,11 @@ interface SidebarProps {
 
 const menuItems = [
   { icon: LayoutDashboard, label: "Dashboard", path: "/" },
-  { icon: ShoppingBag, label: "Shop", path: "/shop" },
   { icon: Users, label: "Customers", path: "/customers" },
   { icon: Package, label: "Inventory", path: "/inventory" },
   { icon: Calendar, label: "Appointments", path: "/appointments" },
   { icon: Eye, label: "AI Eye Test", path: "/ai-test" },
-  { icon: Receipt, label: "Billing", path: "/billing" },
+  { icon: LayoutDashboard, label: "Analytics", path: "/analytics" },
 ];
 
 export default function Sidebar({ user, onLogout }: SidebarProps) {

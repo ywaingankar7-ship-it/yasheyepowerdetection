@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { 
   Users, 
-  DollarSign, 
   Calendar, 
   AlertTriangle, 
   Activity,
@@ -48,9 +47,9 @@ export default function Dashboard() {
 
   const stats = [
     { label: "Total Customers", value: data.stats.totalCustomers, icon: Users, color: "text-blue-400", bg: "bg-blue-400/10", trend: "+12%" },
-    { label: "Total Revenue", value: `$${data.stats.totalRevenue.toLocaleString()}`, icon: DollarSign, color: "text-emerald-400", bg: "bg-emerald-400/10", trend: "+8%" },
-    { label: "Appointments Today", value: data.stats.appointmentsToday, icon: Calendar, color: "text-amber-400", bg: "bg-amber-400/10", trend: "0%" },
     { label: "AI Tests Done", value: data.stats.aiTests, icon: Activity, color: "text-violet-400", bg: "bg-violet-400/10", trend: "+24%" },
+    { label: "Appointments Today", value: data.stats.appointmentsToday, icon: Calendar, color: "text-amber-400", bg: "bg-amber-400/10", trend: "0%" },
+    { label: "System Accuracy", value: "98.4%", icon: TrendingUp, color: "text-emerald-400", bg: "bg-emerald-400/10", trend: "+0.2%" },
   ];
 
   return (
@@ -133,31 +132,35 @@ export default function Dashboard() {
         <div className="lg:col-span-2 glass-card h-[400px] flex flex-col">
           <div className="flex items-center justify-between mb-6">
             <h3 className="font-bold text-lg flex items-center gap-2">
-              <TrendingUp className="w-5 h-5 text-cyan-400" />
-              Revenue Analytics
+              <Activity className="w-5 h-5 text-cyan-400" />
+              Diagnosis Trends
             </h3>
-            <select className="bg-white/5 border border-white/10 rounded-lg text-xs p-1 px-2 focus:outline-none">
-              <option>Last 7 Days</option>
-              <option>Last 30 Days</option>
-            </select>
           </div>
           <div className="flex-1">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={data.salesHistory.reverse()}>
+              <AreaChart data={[
+                { day: 'Mon', tests: 12 },
+                { day: 'Tue', tests: 18 },
+                { day: 'Wed', tests: 15 },
+                { day: 'Thu', tests: 22 },
+                { day: 'Fri', tests: 30 },
+                { day: 'Sat', tests: 25 },
+                { day: 'Sun', tests: 20 },
+              ]}>
                 <defs>
-                  <linearGradient id="colorRev" x1="0" y1="0" x2="0" y2="1">
+                  <linearGradient id="colorTests" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#22d3ee" stopOpacity={0.3}/>
                     <stop offset="95%" stopColor="#22d3ee" stopOpacity={0}/>
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" vertical={false} />
                 <XAxis dataKey="day" stroke="#64748b" fontSize={10} tickLine={false} axisLine={false} />
-                <YAxis stroke="#64748b" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(v) => `$${v}`} />
+                <YAxis stroke="#64748b" fontSize={10} tickLine={false} axisLine={false} />
                 <Tooltip 
                   contentStyle={{ backgroundColor: "#0f172a", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "12px" }}
                   itemStyle={{ color: "#22d3ee" }}
                 />
-                <Area type="monotone" dataKey="revenue" stroke="#22d3ee" strokeWidth={3} fillOpacity={1} fill="url(#colorRev)" />
+                <Area type="monotone" dataKey="tests" stroke="#22d3ee" strokeWidth={3} fillOpacity={1} fill="url(#colorTests)" />
               </AreaChart>
             </ResponsiveContainer>
           </div>

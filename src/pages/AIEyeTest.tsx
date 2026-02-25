@@ -15,6 +15,13 @@ export default function AIEyeTest() {
   const [history, setHistory] = useState<any[]>([]);
   const [customerId, setCustomerId] = useState("1");
   const [customers, setCustomers] = useState<any[]>([]);
+  const [isCameraOpen, setIsCameraOpen] = useState(false);
+  const videoRef = React.useRef<HTMLVideoElement>(null);
+  const canvasRef = React.useRef<HTMLCanvasElement>(null);
+  const [manualPower, setManualPower] = useState({
+    left: { spherical: "", cylindrical: "", axis: "" },
+    right: { spherical: "", cylindrical: "", axis: "" }
+  });
 
   useEffect(() => {
     fetch("/api/customers", {
@@ -26,6 +33,52 @@ export default function AIEyeTest() {
     fetchHistory();
   }, []);
 
+  const startCamera = async () => {
+    setIsCameraOpen(true);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } });
+      if (videoRef.current) videoRef.current.srcObject = stream;
+    } catch (err) {
+      alert("Camera access denied");
+      setIsCameraOpen(false);
+    }
+  };
+
+  const captureImage = () => {
+    if (videoRef.current && canvasRef.current) {
+      const context = canvasRef.current.getContext("2d");
+      if (context) {
+        canvasRef.current.width = videoRef.current.videoWidth;
+        canvasRef.current.height = videoRef.current.videoHeight;
+        context.drawImage(videoRef.current, 0, 0);
+        const dataUrl = canvasRef.current.toDataURL("image/jpeg");
+        const blob = dataURLtoBlob(dataUrl);
+        const file = new File([blob], "capture.jpg", { type: "image/jpeg" });
+        setFile(file);
+        setPreview(dataUrl);
+        stopCamera();
+      }
+    }
+  };
+
+  const stopCamera = () => {
+    if (videoRef.current && videoRef.current.srcObject) {
+      const tracks = (videoRef.current.srcObject as MediaStream).getTracks();
+      tracks.forEach(track => track.stop());
+      videoRef.current.srcObject = null;
+    }
+    setIsCameraOpen(false);
+  };
+
+  const dataURLtoBlob = (dataurl: string) => {
+    const arr = dataurl.split(',');
+    const mime = arr[0].match(/:(.*?);/)![1];
+    const bstr = atob(arr[1]);
+    let n = bstr.length;
+    const u8arr = new Uint8Array(n);
+    while (n--) u8arr[n] = bstr.charCodeAt(n);
+    return new Blob([u8arr], { type: mime });
+  };
   const fetchHistory = async () => {
     try {
       const response = await fetch("/api/eye-tests", {
@@ -63,21 +116,13 @@ export default function AIEyeTest() {
     setLoading(true);
 
     try {
-      // Check for API key selection if platform tools are available
-      if (typeof (window as any).aistudio !== 'undefined') {
-        const hasKey = await (window as any).aistudio.hasSelectedApiKey();
-        if (!hasKey) {
-          await (window as any).aistudio.openSelectKey();
-        }
-      }
-
       const apiKey = process.env.GEMINI_API_KEY || (process.env as any).API_KEY;
       if (!apiKey) {
-        throw new Error("Gemini API Key not found. Please ensure it is set in the environment or selected via the key dialog.");
+        throw new Error("Gemini API Key not found.");
       }
 
       const ai = new GoogleGenAI({ apiKey });
-      const model = "gemini-3.1-pro-preview"; // Using Pro for better medical analysis
+      const model = "gemini-3-flash-preview"; 
 
       // Convert file to base64
       const reader = new FileReader();
@@ -96,24 +141,30 @@ export default function AIEyeTest() {
       
       Your task is to provide a comprehensive optical diagnosis and prescription.
       
-      REQUIRED FIELDS (Do not return 'N/A', 'None', or '0' if you can provide a clinical estimate):
-      1. Refractive Power (OD - Right Eye, OS - Left Eye):
+      REQUIRED ANALYSIS:
+      1. Refractive Error Detection:
+         - Myopia (Nearsightedness)
+         - Hyperopia (Farsightedness)
+         - Astigmatism
+      2. Severity Level Prediction: (Mild, Moderate, Severe)
+      3. Refractive Power (OD - Right Eye, OS - Left Eye):
          - Spherical (S): Must include sign (+ for hyperopia, - for myopia). e.g., "-2.50", "+1.75".
          - Cylindrical (C): Must include sign. e.g., "-0.75", "+0.25".
          - Axis (A): Degrees from 0 to 180.
-      2. Clinical Observations:
+      4. Clinical Observations:
          - Redness: Level (None, Mild, Moderate, Severe).
          - Dryness: Status (Absent, Mild, Chronic).
          - Clarity: Status of the cornea and lens (Clear, Cloudy, Hazy).
-      3. Pupillary Distance (PD): Estimate the distance between pupils in mm (e.g., "63mm").
-      4. Abnormalities: List any detected conditions (e.g., "Slight Conjunctivitis", "Early Cataract signs", "Healthy").
-      5. Confidence Level: 0-100.
-      6. Professional Summary: A detailed explanation of the findings and recommended next steps.
-
+      5. Pupillary Distance (PD): Estimate the distance between pupils in mm (e.g., "63mm").
+      6. Abnormalities: List any detected conditions (e.g., "Slight Conjunctivitis", "Early Cataract signs", "Healthy").
+      7. Confidence Level: 0-100.
+      8. Professional Summary: A detailed explanation of the findings and recommended next steps.
+      
       Return ONLY a valid JSON object following this schema:
       {
-        "left_eye": { "spherical": string, "cylindrical": string, "axis": number, "redness": string, "dryness": string, "clarity": string },
-        "right_eye": { "spherical": string, "cylindrical": string, "axis": number, "redness": string, "dryness": string, "clarity": string },
+        "left_eye": { "spherical": string, "cylindrical": string, "axis": number, "redness": string, "dryness": string, "clarity": string, "severity": string },
+        "right_eye": { "spherical": string, "cylindrical": string, "axis": number, "redness": string, "dryness": string, "clarity": string, "severity": string },
+        "conditions": string[],
         "pd": string,
         "abnormalities": string[],
         "confidence_level": number,
@@ -168,9 +219,9 @@ export default function AIEyeTest() {
       type: "manual",
       distance: `${distance}ft`,
       pd: `${pd}mm`,
-      left_eye: { acuity: leftEyeAcuity },
-      right_eye: { acuity: rightEyeAcuity },
-      summary: `Manual Snellen Chart test performed at ${distance}ft. PD: ${pd}mm. Left Eye: ${leftEyeAcuity}, Right Eye: ${rightEyeAcuity}.`
+      left_eye: { acuity: leftEyeAcuity, ...manualPower.left },
+      right_eye: { acuity: rightEyeAcuity, ...manualPower.right },
+      summary: `Manual Snellen Chart test performed at ${distance}ft. PD: ${pd}mm. Left Eye: ${leftEyeAcuity} (S:${manualPower.left.spherical}, C:${manualPower.left.cylindrical}, A:${manualPower.left.axis}), Right Eye: ${rightEyeAcuity} (S:${manualPower.right.spherical}, C:${manualPower.right.cylindrical}, A:${manualPower.right.axis}).`
     };
 
     try {
@@ -232,16 +283,16 @@ export default function AIEyeTest() {
       doc.setFont("helvetica", "bold");
       doc.text("TEST PARAMETERS", 20, 75);
       doc.setFont("helvetica", "normal");
-      doc.text(`Test Distance: ${result.distance} ft`, 20, 82);
+      doc.text(`Test Distance: ${result.distance}`, 20, 82);
       doc.text(`Pupillary Distance (PD): ${result.pd || "N/A"}`, 20, 89);
 
       // Results Table
       (doc as any).autoTable({
         startY: 100,
-        head: [["Eye", "Visual Acuity (Snellen)"]],
+        head: [["Eye", "Acuity", "SPH", "CYL", "AXIS"]],
         body: [
-          ["Left Eye (OS)", result.left_eye?.acuity || "N/A"],
-          ["Right Eye (OD)", result.right_eye?.acuity || "N/A"]
+          ["Left Eye (OS)", result.left_eye?.acuity || "N/A", result.left_eye?.spherical || "0.00", result.left_eye?.cylindrical || "0.00", result.left_eye?.axis || "0"],
+          ["Right Eye (OD)", result.right_eye?.acuity || "N/A", result.right_eye?.spherical || "0.00", result.right_eye?.cylindrical || "0.00", result.right_eye?.axis || "0"]
         ],
         theme: "grid",
         headStyles: { fillColor: [15, 23, 42] }
@@ -396,7 +447,20 @@ export default function AIEyeTest() {
                 }`}
               >
                 <input {...getInputProps()} />
-                {preview ? (
+                {isCameraOpen ? (
+                  <div className="relative">
+                    <video ref={videoRef} autoPlay playsInline className="w-full rounded-xl shadow-2xl" />
+                    <canvas ref={canvasRef} className="hidden" />
+                    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-4">
+                      <button 
+                        onClick={(e) => { e.stopPropagation(); captureImage(); }}
+                        className="w-16 h-16 bg-white rounded-full border-4 border-cyan-500 flex items-center justify-center shadow-2xl hover:scale-110 transition-transform"
+                      >
+                        <div className="w-12 h-12 bg-white border-2 border-slate-900 rounded-full"></div>
+                      </button>
+                    </div>
+                  </div>
+                ) : preview ? (
                   <div className="relative group">
                     <img src={preview} alt="Preview" className="max-h-64 mx-auto rounded-xl shadow-2xl" />
                     <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center rounded-xl">
@@ -412,6 +476,12 @@ export default function AIEyeTest() {
                       <p className="text-sm font-bold">Drag & drop eye image here</p>
                       <p className="text-xs text-slate-500 mt-1">Supports JPG, PNG (Max 5MB)</p>
                     </div>
+                    <button 
+                      onClick={(e) => { e.stopPropagation(); startCamera(); }}
+                      className="mt-4 px-4 py-2 bg-cyan-500/10 text-cyan-400 rounded-lg text-xs font-bold hover:bg-cyan-500 hover:text-white transition-all"
+                    >
+                      Or Open Camera
+                    </button>
                   </div>
                 )}
               </div>
@@ -508,6 +578,61 @@ export default function AIEyeTest() {
                 <div className="bg-white/5 p-3 rounded-xl border border-white/10">
                   <p className="text-[10px] text-slate-500 uppercase font-bold mb-1">Right Eye Result</p>
                   <p className="text-lg font-black text-cyan-400">{rightEyeAcuity || "--"}</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-6">
+                <div className="space-y-4">
+                  <h4 className="text-xs font-bold uppercase tracking-widest text-cyan-400">Left Eye Power</h4>
+                  <div className="grid grid-cols-3 gap-2">
+                    <input 
+                      type="text" 
+                      placeholder="SPH" 
+                      value={manualPower.left.spherical}
+                      onChange={(e) => setManualPower({ ...manualPower, left: { ...manualPower.left, spherical: e.target.value } })}
+                      className="bg-white/5 border border-white/10 rounded-lg p-2 text-xs focus:ring-1 focus:ring-cyan-500 outline-none"
+                    />
+                    <input 
+                      type="text" 
+                      placeholder="CYL" 
+                      value={manualPower.left.cylindrical}
+                      onChange={(e) => setManualPower({ ...manualPower, left: { ...manualPower.left, cylindrical: e.target.value } })}
+                      className="bg-white/5 border border-white/10 rounded-lg p-2 text-xs focus:ring-1 focus:ring-cyan-500 outline-none"
+                    />
+                    <input 
+                      type="text" 
+                      placeholder="AXIS" 
+                      value={manualPower.left.axis}
+                      onChange={(e) => setManualPower({ ...manualPower, left: { ...manualPower.left, axis: e.target.value } })}
+                      className="bg-white/5 border border-white/10 rounded-lg p-2 text-xs focus:ring-1 focus:ring-cyan-500 outline-none"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-4">
+                  <h4 className="text-xs font-bold uppercase tracking-widest text-cyan-400">Right Eye Power</h4>
+                  <div className="grid grid-cols-3 gap-2">
+                    <input 
+                      type="text" 
+                      placeholder="SPH" 
+                      value={manualPower.right.spherical}
+                      onChange={(e) => setManualPower({ ...manualPower, right: { ...manualPower.right, spherical: e.target.value } })}
+                      className="bg-white/5 border border-white/10 rounded-lg p-2 text-xs focus:ring-1 focus:ring-cyan-500 outline-none"
+                    />
+                    <input 
+                      type="text" 
+                      placeholder="CYL" 
+                      value={manualPower.right.cylindrical}
+                      onChange={(e) => setManualPower({ ...manualPower, right: { ...manualPower.right, cylindrical: e.target.value } })}
+                      className="bg-white/5 border border-white/10 rounded-lg p-2 text-xs focus:ring-1 focus:ring-cyan-500 outline-none"
+                    />
+                    <input 
+                      type="text" 
+                      placeholder="AXIS" 
+                      value={manualPower.right.axis}
+                      onChange={(e) => setManualPower({ ...manualPower, right: { ...manualPower.right, axis: e.target.value } })}
+                      className="bg-white/5 border border-white/10 rounded-lg p-2 text-xs focus:ring-1 focus:ring-cyan-500 outline-none"
+                    />
+                  </div>
                 </div>
               </div>
 
