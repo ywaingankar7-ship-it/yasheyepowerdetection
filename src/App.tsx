@@ -9,6 +9,7 @@ import Inventory from "./pages/Inventory";
 import Appointments from "./pages/Appointments";
 import AIEyeTest from "./pages/AIEyeTest";
 import Analytics from "./pages/Analytics";
+import PatientPortal from "./pages/PatientPortal";
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -52,12 +53,19 @@ export default function App() {
         />
         
         <Route element={user ? <Layout user={user} onLogout={handleLogout} /> : <Navigate to="/login" />}>
-          <Route path="/" element={<Dashboard />} />
-          <Route path="/customers" element={<Customers />} />
+          <Route path="/" element={user?.role === 'patient' ? <PatientPortal /> : <Dashboard />} />
+          {user?.role === 'admin' && (
+            <>
+              <Route path="/customers" element={<Customers />} />
+              <Route path="/analytics" element={<Analytics />} />
+            </>
+          )}
           <Route path="/inventory" element={<Inventory />} />
-          <Route path="/appointments" element={<Appointments />} />
+          <Route path="/appointments" element={user?.role === 'patient' ? <PatientPortal /> : <Appointments />} />
           <Route path="/ai-test" element={<AIEyeTest />} />
-          <Route path="/analytics" element={<Analytics />} />
+          {user?.role === 'patient' && (
+            <Route path="/portal" element={<PatientPortal />} />
+          )}
         </Route>
 
         <Route path="*" element={<Navigate to="/" />} />

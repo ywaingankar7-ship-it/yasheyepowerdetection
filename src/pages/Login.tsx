@@ -88,6 +88,23 @@ export default function Login({ onLogin }: LoginProps) {
             )}
 
             <form onSubmit={handleSubmit} className="space-y-6">
+              <div className="flex gap-2 mb-4">
+                <button 
+                  type="button"
+                  onClick={() => { setEmail("admin@visionx.com"); setPassword("admin123"); }}
+                  className="flex-1 py-2 bg-white/5 border border-white/10 rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-cyan-500/10 hover:text-cyan-400 transition-all"
+                >
+                  Admin
+                </button>
+                <button 
+                  type="button"
+                  onClick={() => { setEmail("patient@visionx.ai"); setPassword("patient123"); }}
+                  className="flex-1 py-2 bg-white/5 border border-white/10 rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-emerald-500/10 hover:text-emerald-400 transition-all"
+                >
+                  Patient
+                </button>
+              </div>
+
               <div className="space-y-2">
                 <label className="text-xs font-semibold uppercase tracking-widest text-slate-500 ml-1">Email Address</label>
                 <div className="relative">

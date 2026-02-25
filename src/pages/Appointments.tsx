@@ -86,7 +86,17 @@ export default function Appointments() {
     }
   };
 
-  const filteredAppointments = appointments.filter(a => filter === "all" || a.status === filter);
+  const [activeTab, setActiveTab] = useState("Today");
+
+  const filteredAppointments = appointments.filter(a => {
+    const matchesStatus = filter === "all" || a.status === filter;
+    const date = parseISO(a.date);
+    let matchesTab = true;
+    if (activeTab === "Today") matchesTab = isToday(date);
+    else if (activeTab === "Tomorrow") matchesTab = isTomorrow(date);
+    // Simplified week check
+    return matchesStatus && matchesTab;
+  });
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -246,11 +256,12 @@ export default function Appointments() {
 
         <div className="lg:col-span-3 space-y-6">
           <div className="flex items-center gap-4 overflow-x-auto pb-2 no-scrollbar">
-            {['Today', 'Tomorrow', 'This Week', 'Next Week'].map((tab, i) => (
+            {['Today', 'Tomorrow', 'All'].map((tab) => (
               <button 
                 key={tab} 
+                onClick={() => setActiveTab(tab)}
                 className={`px-6 py-2 rounded-full text-sm font-bold whitespace-nowrap transition-all ${
-                  i === 0 ? 'bg-cyan-500 text-white shadow-lg shadow-cyan-500/20' : 'bg-white/5 text-slate-400 hover:bg-white/10'
+                  activeTab === tab ? 'bg-cyan-500 text-white shadow-lg shadow-cyan-500/20' : 'bg-white/5 text-slate-400 hover:bg-white/10'
                 }`}
               >
                 {tab}

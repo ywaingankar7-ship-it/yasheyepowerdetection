@@ -23,11 +23,18 @@ import {
 } from "recharts";
 import { motion } from "motion/react";
 
+import { useNavigate } from "react-router-dom";
+
 export default function Dashboard() {
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState<any>(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
+    const savedUser = localStorage.getItem("visionx_user");
+    if (savedUser) setUser(JSON.parse(savedUser));
+
     fetch("/api/analytics", {
       headers: { Authorization: `Bearer ${localStorage.getItem("visionx_token")}` }
     })
@@ -38,7 +45,7 @@ export default function Dashboard() {
     });
   }, []);
 
-  if (loading) return <div className="animate-pulse space-y-8">
+  if (loading || !user) return <div className="animate-pulse space-y-8">
     <div className="h-32 bg-white/5 rounded-2xl"></div>
     <div className="grid grid-cols-4 gap-6">
       {[1,2,3,4].map(i => <div key={i} className="h-24 bg-white/5 rounded-2xl"></div>)}
@@ -46,22 +53,42 @@ export default function Dashboard() {
   </div>;
 
   const stats = [
-    { label: "Total Customers", value: data.stats.totalCustomers, icon: Users, color: "text-blue-400", bg: "bg-blue-400/10", trend: "+12%" },
+    ...(user.role === 'admin' ? [{ label: "Total Customers", value: data.stats.totalCustomers, icon: Users, color: "text-blue-400", bg: "bg-blue-400/10", trend: "+12%" }] : []),
     { label: "AI Tests Done", value: data.stats.aiTests, icon: Activity, color: "text-violet-400", bg: "bg-violet-400/10", trend: "+24%" },
     { label: "Appointments Today", value: data.stats.appointmentsToday, icon: Calendar, color: "text-amber-400", bg: "bg-amber-400/10", trend: "0%" },
     { label: "System Accuracy", value: "98.4%", icon: TrendingUp, color: "text-emerald-400", bg: "bg-emerald-400/10", trend: "+0.2%" },
   ];
+
+  const handleExport = () => {
+    const reportData = JSON.stringify(data, null, 2);
+    const blob = new Blob([reportData], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `visionx_report_${new Date().toISOString().split('T')[0]}.json`;
+    link.click();
+  };
 
   return (
     <div className="space-y-8">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Dashboard Overview</h1>
-          <p className="text-slate-400 mt-1">Welcome back! Here's what's happening today.</p>
+          <p className="text-slate-400 mt-1">Welcome back, {user.name}! Here's what's happening today.</p>
         </div>
         <div className="flex gap-3">
-          <button className="glass px-4 py-2 rounded-xl text-sm font-medium hover:bg-white/10 transition-all">Export Report</button>
-          <button className="gradient-bg px-4 py-2 rounded-xl text-sm font-bold shadow-lg shadow-cyan-500/20">New Appointment</button>
+          <button 
+            onClick={handleExport}
+            className="glass px-4 py-2 rounded-xl text-sm font-medium hover:bg-white/10 transition-all"
+          >
+            Export Report
+          </button>
+          <button 
+            onClick={() => navigate('/appointments')}
+            className="gradient-bg px-4 py-2 rounded-xl text-sm font-bold shadow-lg shadow-cyan-500/20"
+          >
+            New Appointment
+          </button>
         </div>
       </div>
 
@@ -190,6 +217,30 @@ export default function Dashboard() {
           <button className="w-full mt-6 py-3 bg-white/5 hover:bg-white/10 rounded-xl text-sm font-semibold transition-all">
             View All Notifications
           </button>
+        </div>
+      </div>
+
+      <div className="glass-card">
+        <h3 className="font-bold text-lg mb-6">Recent Activity</h3>
+        <div className="space-y-4">
+          {[
+            { user: "Dr. Smith", action: "Completed AI Eye Test", target: "John Doe", time: "10 mins ago" },
+            { user: "Admin", action: "Updated Inventory", target: "Ray-Ban Aviator", time: "25 mins ago" },
+            { user: "Staff", action: "Booked Appointment", target: "Jane Wilson", time: "1 hour ago" },
+          ].map((activity, i) => (
+            <div key={i} className="flex items-center justify-between p-4 bg-white/5 rounded-xl border border-white/10">
+              <div className="flex items-center gap-4">
+                <div className="w-10 h-10 rounded-full bg-cyan-500/10 flex items-center justify-center text-cyan-400 font-bold">
+                  {activity.user.charAt(0)}
+                </div>
+                <div>
+                  <p className="text-sm font-bold text-white">{activity.user} <span className="text-slate-400 font-normal">{activity.action}</span></p>
+                  <p className="text-xs text-slate-500">Target: {activity.target}</p>
+                </div>
+              </div>
+              <p className="text-xs text-slate-500">{activity.time}</p>
+            </div>
+          ))}
         </div>
       </div>
     </div>

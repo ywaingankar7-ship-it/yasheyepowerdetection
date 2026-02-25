@@ -24,7 +24,9 @@ export default function Inventory() {
     model: "",
     type: "frame",
     price: 0,
-    stock: 0
+    stock: 0,
+    image_url: "",
+    details: "{}"
   });
 
   useEffect(() => {
@@ -45,21 +47,40 @@ export default function Inventory() {
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
+      const payload = {
+        ...newItem,
+        details: JSON.parse(newItem.details || "{}")
+      };
       const response = await fetch("/api/inventory", {
         method: "POST",
         headers: { 
           "Content-Type": "application/json",
           Authorization: `Bearer ${localStorage.getItem("visionx_token")}` 
         },
-        body: JSON.stringify(newItem),
+        body: JSON.stringify(payload),
       });
       if (response.ok) {
         fetchInventory();
         setShowModal(false);
-        setNewItem({ brand: "", model: "", type: "frame", price: 0, stock: 0 });
+        setNewItem({ brand: "", model: "", type: "frame", price: 0, stock: 0, image_url: "", details: "{}" });
       }
     } catch (err) {
-      alert("Failed to add item");
+      alert("Failed to add item. Ensure details is valid JSON.");
+    }
+  };
+
+  const handleDelete = async (id: number) => {
+    if (!confirm("Are you sure you want to delete this item?")) return;
+    try {
+      const response = await fetch(`/api/inventory/${id}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${localStorage.getItem("visionx_token")}` }
+      });
+      if (response.ok) {
+        fetchInventory();
+      }
+    } catch (err) {
+      alert("Failed to delete item");
     }
   };
 
@@ -138,6 +159,15 @@ export default function Inventory() {
                     <option value="accessory">Accessory</option>
                   </select>
                 </div>
+                <div className="space-y-2">
+                  <label className="text-xs font-bold uppercase tracking-widest text-slate-500">Image URL</label>
+                  <input 
+                    value={newItem.image_url}
+                    onChange={(e) => setNewItem({ ...newItem, image_url: e.target.value })}
+                    className="w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+                    placeholder="https://example.com/image.jpg"
+                  />
+                </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <label className="text-xs font-bold uppercase tracking-widest text-slate-500">Price ($)</label>
@@ -159,6 +189,15 @@ export default function Inventory() {
                       className="w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
                     />
                   </div>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-xs font-bold uppercase tracking-widest text-slate-500">Details (JSON)</label>
+                  <textarea 
+                    value={newItem.details}
+                    onChange={(e) => setNewItem({ ...newItem, details: e.target.value })}
+                    className="w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/50 h-20"
+                    placeholder='{"color": "Black", "material": "Metal"}'
+                  />
                 </div>
                 <div className="flex gap-3 pt-4">
                   <button 
@@ -264,19 +303,26 @@ export default function Inventory() {
                 filteredItems.map((item) => (
                   <tr key={item.id} className="hover:bg-white/5 transition-colors group">
                     <td className="px-6 py-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-white/5 rounded-lg flex items-center justify-center">
-                          <Package className="w-5 h-5 text-slate-400" />
+                      <div className="flex items-center gap-4">
+                        <div className="w-16 h-16 bg-white/5 rounded-xl flex items-center justify-center overflow-hidden border border-white/10 group-hover:border-cyan-500/50 transition-colors">
+                          {item.image_url ? (
+                            <img src={item.image_url} alt={item.model} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                          ) : (
+                            <Package className="w-6 h-6 text-slate-500" />
+                          )}
                         </div>
                         <div>
-                          <p className="font-bold text-sm">{item.brand}</p>
+                          <p className="font-bold text-sm text-white group-hover:text-cyan-400 transition-colors">{item.brand}</p>
                           <p className="text-xs text-slate-500">{item.model}</p>
                         </div>
                       </div>
                     </td>
                     <td className="px-6 py-4">
                       <span className={`px-2 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider ${
-                        item.type === 'frame' ? 'bg-blue-400/10 text-blue-400' : 'bg-violet-400/10 text-violet-400'
+                        item.type === 'frame' ? 'bg-blue-400/10 text-blue-400' : 
+                        item.type === 'sunglasses' ? 'bg-amber-400/10 text-amber-400' :
+                        item.type === 'lens' ? 'bg-violet-400/10 text-violet-400' :
+                        'bg-slate-400/10 text-slate-400'
                       }`}>
                         {item.type}
                       </span>
@@ -312,13 +358,22 @@ export default function Inventory() {
                     </td>
                     <td className="px-6 py-4 text-right">
                       <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button className="p-2 hover:bg-white/10 rounded-lg text-slate-400 hover:text-cyan-400 transition-all">
+                        <button 
+                          onClick={() => alert("Edit functionality coming soon!")}
+                          className="p-2 hover:bg-white/10 rounded-lg text-slate-400 hover:text-cyan-400 transition-all"
+                        >
                           <Edit2 className="w-4 h-4" />
                         </button>
-                        <button className="p-2 hover:bg-rose-400/10 rounded-lg text-slate-400 hover:text-rose-400 transition-all">
+                        <button 
+                          onClick={() => handleDelete(item.id)}
+                          className="p-2 hover:bg-rose-400/10 rounded-lg text-slate-400 hover:text-rose-400 transition-all"
+                        >
                           <Trash2 className="w-4 h-4" />
                         </button>
-                        <button className="p-2 hover:bg-white/10 rounded-lg text-slate-400 transition-all">
+                        <button 
+                          onClick={() => alert("More options coming soon!")}
+                          className="p-2 hover:bg-white/10 rounded-lg text-slate-400 transition-all"
+                        >
                           <MoreVertical className="w-4 h-4" />
                         </button>
                       </div>

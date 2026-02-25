@@ -1,4 +1,4 @@
-export type Role = 'admin' | 'staff' | 'customer';
+export type Role = 'admin' | 'patient';
 
 export interface User {
   id: number;
@@ -13,16 +13,19 @@ export interface Customer {
   email: string;
   phone: string;
   address: string;
+  age?: number;
+  gender?: string;
   created_at: string;
 }
 
 export interface InventoryItem {
   id: number;
-  type: 'frame' | 'lens';
+  type: 'frame' | 'lens' | 'sunglasses' | 'accessory';
   brand: string;
   model: string;
   price: number;
   stock: number;
+  image_url?: string;
   details: string; // JSON string
 }
 

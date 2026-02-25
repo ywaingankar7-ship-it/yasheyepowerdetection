@@ -48,11 +48,12 @@ db.exec(`
 
   CREATE TABLE IF NOT EXISTS inventory (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    type TEXT NOT NULL, -- 'frame', 'lens'
+    type TEXT NOT NULL, -- 'frame', 'lens', 'sunglasses'
     brand TEXT,
     model TEXT,
     price REAL NOT NULL,
     stock INTEGER DEFAULT 0,
+    image_url TEXT,
     details TEXT -- JSON string
   );
 
@@ -88,25 +89,39 @@ if (!adminExists) {
   );
 }
 
+// Seed Patient if not exists
+const patientExists = db.prepare("SELECT * FROM users WHERE email = 'patient@visionx.ai'").get();
+if (!patientExists) {
+  const hashedPassword = bcrypt.hashSync("patient123", 10);
+  db.prepare("INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, ?)").run(
+    "John Doe",
+    "patient@visionx.ai",
+    hashedPassword,
+    "patient"
+  );
+}
+
 // Seed Inventory if empty
 const invCount = db.prepare("SELECT COUNT(*) as count FROM inventory").get() as any;
 if (invCount.count === 0) {
   const items = [
-    { type: 'frame', brand: 'Ray-Ban', model: 'Aviator Classic', price: 150, stock: 12, details: { color: 'Gold', material: 'Metal' } },
-    { type: 'frame', brand: 'Oakley', model: 'Holbrook', price: 130, stock: 8, details: { color: 'Matte Black', material: 'O Matter' } },
-    { type: 'frame', brand: 'Prada', model: 'Linear Rossa', price: 280, stock: 4, details: { color: 'Grey', material: 'Acetate' } },
-    { type: 'lens', brand: 'Essilor', model: 'Crizal Sapphire', price: 85, stock: 25, details: { coating: 'Anti-reflective', index: 1.6 } },
-    { type: 'lens', brand: 'Zeiss', model: 'BlueGuard', price: 95, stock: 15, details: { coating: 'Blue light filter', index: 1.67 } },
+    { type: 'frame', brand: 'Ray-Ban', model: 'Aviator Classic', price: 150, stock: 12, image_url: 'https://picsum.photos/seed/rayban/300/200', details: { color: 'Gold', material: 'Metal' } },
+    { type: 'frame', brand: 'Oakley', model: 'Holbrook', price: 130, stock: 8, image_url: 'https://picsum.photos/seed/oakley/300/200', details: { color: 'Matte Black', material: 'O Matter' } },
+    { type: 'sunglasses', brand: 'Prada', model: 'Linear Rossa', price: 280, stock: 4, image_url: 'https://picsum.photos/seed/prada/300/200', details: { color: 'Grey', material: 'Acetate' } },
+    { type: 'sunglasses', brand: 'Gucci', model: 'GG0006O', price: 320, stock: 6, image_url: 'https://picsum.photos/seed/gucci/300/200', details: { color: 'Black', material: 'Acetate' } },
+    { type: 'lens', brand: 'Essilor', model: 'Crizal Sapphire', price: 85, stock: 25, image_url: 'https://picsum.photos/seed/essilor/300/200', details: { coating: 'Anti-reflective', index: 1.6 } },
+    { type: 'lens', brand: 'Zeiss', model: 'BlueGuard', price: 95, stock: 15, image_url: 'https://picsum.photos/seed/zeiss/300/200', details: { coating: 'Blue light filter', index: 1.67 } },
+    { type: 'accessory', brand: 'VisionX', model: 'Premium Case', price: 25, stock: 50, image_url: 'https://picsum.photos/seed/case/300/200', details: { color: 'Black', material: 'Leather' } },
   ];
-  const stmt = db.prepare("INSERT INTO inventory (type, brand, model, price, stock, details) VALUES (?, ?, ?, ?, ?, ?)");
-  items.forEach(item => stmt.run(item.type, item.brand, item.model, item.price, item.stock, JSON.stringify(item.details)));
+  const stmt = db.prepare("INSERT INTO inventory (type, brand, model, price, stock, image_url, details) VALUES (?, ?, ?, ?, ?, ?, ?)");
+  items.forEach(item => stmt.run(item.type, item.brand, item.model, item.price, item.stock, item.image_url, JSON.stringify(item.details)));
 }
 
 // Seed Customers if empty
 const custCount = db.prepare("SELECT COUNT(*) as count FROM customers").get() as any;
 if (custCount.count === 0) {
   const customers = [
-    { name: 'John Doe', email: 'john@example.com', phone: '+1 555 0123', address: '456 Oak Ave, Springfield', age: 25, gender: 'Male' },
+    { name: 'John Doe', email: 'patient@visionx.ai', phone: '+1 555 0123', address: '456 Oak Ave, Springfield', age: 25, gender: 'Male' },
     { name: 'Jane Smith', email: 'jane@example.com', phone: '+1 555 0456', address: '789 Pine St, Metropolis', age: 34, gender: 'Female' },
     { name: 'Robert Brown', email: 'robert@example.com', phone: '+1 555 0789', address: '101 Maple Ln, Gotham', age: 62, gender: 'Male' },
   ];
@@ -224,6 +239,29 @@ app.get("/api/activity-logs", authenticate, (req, res) => {
   res.json(logs);
 });
 
+// Patient Portal Endpoints
+app.get("/api/patient/appointments", authenticate, (req, res) => {
+  const user = (req as any).user;
+  if (user.role !== 'patient') return res.status(403).json({ error: "Forbidden" });
+
+  const customer = db.prepare("SELECT id FROM customers WHERE email = ?").get(user.email) as any;
+  if (!customer) return res.json([]);
+
+  const appointments = db.prepare("SELECT * FROM appointments WHERE customer_id = ? ORDER BY date ASC").all(customer.id);
+  res.json(appointments);
+});
+
+app.get("/api/patient/tests", authenticate, (req, res) => {
+  const user = (req as any).user;
+  if (user.role !== 'patient') return res.status(403).json({ error: "Forbidden" });
+
+  const customer = db.prepare("SELECT id FROM customers WHERE email = ?").get(user.email) as any;
+  if (!customer) return res.json([]);
+
+  const tests = db.prepare("SELECT * FROM eye_tests WHERE customer_id = ? ORDER BY date DESC").all(customer.id);
+  res.json(tests);
+});
+
 // Inventory
 app.get("/api/inventory", authenticate, (req, res) => {
   const items = db.prepare("SELECT * FROM inventory").all();
@@ -231,14 +269,19 @@ app.get("/api/inventory", authenticate, (req, res) => {
 });
 
 app.post("/api/inventory", authenticate, (req, res) => {
-  const { type, brand, model, price, stock, details } = req.body;
-  const result = db.prepare("INSERT INTO inventory (type, brand, model, price, stock, details) VALUES (?, ?, ?, ?, ?, ?)").run(
-    type, brand, model, price, stock, JSON.stringify(details)
+  const { type, brand, model, price, stock, image_url, details } = req.body;
+  const result = db.prepare("INSERT INTO inventory (type, brand, model, price, stock, image_url, details) VALUES (?, ?, ?, ?, ?, ?, ?)").run(
+    type, brand, model, price, stock, image_url, JSON.stringify(details)
   );
   res.json({ id: result.lastInsertRowid });
 });
 
 // Appointments
+app.delete("/api/inventory/:id", authenticate, (req, res) => {
+  db.prepare("DELETE FROM inventory WHERE id = ?").run(req.params.id);
+  res.json({ success: true });
+});
+
 app.get("/api/appointments", authenticate, (req, res) => {
   const appointments = db.prepare(`
     SELECT a.*, c.name as customer_name 
@@ -247,6 +290,11 @@ app.get("/api/appointments", authenticate, (req, res) => {
     ORDER BY a.date ASC, a.time ASC
   `).all();
   res.json(appointments);
+});
+
+app.delete("/api/customers/:id", authenticate, (req, res) => {
+  db.prepare("DELETE FROM customers WHERE id = ?").run(req.params.id);
+  res.json({ success: true });
 });
 
 app.post("/api/appointments", authenticate, (req, res) => {

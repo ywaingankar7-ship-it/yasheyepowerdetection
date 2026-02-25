@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { 
   Users, 
   Plus, 
@@ -8,12 +9,14 @@ import {
   MapPin, 
   History, 
   Download,
-  MoreHorizontal
+  MoreHorizontal,
+  Trash2
 } from "lucide-react";
 import { Customer } from "../types";
 import { motion, AnimatePresence } from "motion/react";
 
 export default function Customers() {
+  const navigate = useNavigate();
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
@@ -60,6 +63,21 @@ export default function Customers() {
       }
     } catch (err) {
       console.error("Failed to add customer:", err);
+    }
+  };
+
+  const handleDeleteCustomer = async (id: number) => {
+    if (!confirm("Are you sure you want to delete this customer?")) return;
+    try {
+      const response = await fetch(`/api/customers/${id}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${localStorage.getItem("visionx_token")}` }
+      });
+      if (response.ok) {
+        fetchCustomers();
+      }
+    } catch (err) {
+      alert("Failed to delete customer");
     }
   };
 
@@ -238,7 +256,14 @@ export default function Customers() {
                 transition={{ delay: i * 0.05 }}
                 className="bg-white/5 border border-white/10 rounded-2xl p-6 hover:bg-white/10 transition-all group relative overflow-hidden"
               >
-                <div className="absolute top-0 right-0 p-4 opacity-0 group-hover:opacity-100 transition-opacity">
+                <div className="absolute top-0 right-0 p-4 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
+                  <button 
+                    onClick={() => handleDeleteCustomer(customer.id)}
+                    className="p-2 hover:bg-rose-500/10 rounded-lg text-slate-400 hover:text-rose-400 transition-all"
+                    title="Delete Customer"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
                   <button className="p-2 hover:bg-white/10 rounded-lg text-slate-400">
                     <MoreHorizontal className="w-5 h-5" />
                   </button>
@@ -273,11 +298,17 @@ export default function Customers() {
                 </div>
 
                 <div className="mt-6 pt-6 border-t border-white/5 flex gap-2">
-                  <button className="flex-1 py-2 bg-white/5 hover:bg-cyan-500/10 hover:text-cyan-400 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2">
+                  <button 
+                    onClick={() => navigate(`/ai-test?customerId=${customer.id}`)}
+                    className="flex-1 py-2 bg-white/5 hover:bg-cyan-500/10 hover:text-cyan-400 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2"
+                  >
                     <History className="w-4 h-4" />
                     Test History
                   </button>
-                  <button className="px-4 py-2 bg-white/5 hover:bg-white/10 rounded-xl text-xs font-bold transition-all">
+                  <button 
+                    onClick={() => alert(`Profile for ${customer.name}`)}
+                    className="px-4 py-2 bg-white/5 hover:bg-white/10 rounded-xl text-xs font-bold transition-all"
+                  >
                     Profile
                   </button>
                 </div>

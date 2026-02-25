@@ -29,6 +29,16 @@ const menuItems = [
 export default function Sidebar({ user, onLogout }: SidebarProps) {
   const location = useLocation();
 
+  const filteredMenuItems = menuItems.filter(item => {
+    if (user.role === 'admin') {
+      return item.path !== '/ai-test';
+    } else if (user.role === 'patient') {
+      return item.path === '/' || item.path === '/appointments' || item.path === '/ai-test' || item.path === '/inventory';
+    } else {
+      return item.path !== '/customers' && item.path !== '/analytics';
+    }
+  });
+
   return (
     <div className="w-64 h-screen glass border-r border-white/10 flex flex-col fixed left-0 top-0 z-50">
       <div className="p-6 flex items-center gap-3">
@@ -42,7 +52,7 @@ export default function Sidebar({ user, onLogout }: SidebarProps) {
       </div>
 
       <nav className="flex-1 px-4 py-6 space-y-2">
-        {menuItems.map((item) => {
+        {filteredMenuItems.map((item) => {
           const isActive = location.pathname === item.path;
           return (
             <Link

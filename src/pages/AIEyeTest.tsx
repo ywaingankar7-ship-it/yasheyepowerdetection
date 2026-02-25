@@ -16,19 +16,38 @@ export default function AIEyeTest() {
   const [customerId, setCustomerId] = useState("1");
   const [customers, setCustomers] = useState<any[]>([]);
   const [isCameraOpen, setIsCameraOpen] = useState(false);
+  const [user, setUser] = useState<any>(null);
   const videoRef = React.useRef<HTMLVideoElement>(null);
   const canvasRef = React.useRef<HTMLCanvasElement>(null);
   const [manualPower, setManualPower] = useState({
-    left: { spherical: "", cylindrical: "", axis: "" },
-    right: { spherical: "", cylindrical: "", axis: "" }
+    left: { spherical: "", cylindrical: "", axis: "", redness: "None", irritation: "None" },
+    right: { spherical: "", cylindrical: "", axis: "", redness: "None", irritation: "None" }
   });
 
   useEffect(() => {
-    fetch("/api/customers", {
-      headers: { Authorization: `Bearer ${localStorage.getItem("visionx_token")}` }
-    })
-    .then(res => res.json())
-    .then(data => setCustomers(data));
+    const savedUser = localStorage.getItem("visionx_user");
+    if (savedUser) {
+      const parsedUser = JSON.parse(savedUser);
+      setUser(parsedUser);
+      if (parsedUser.role === 'patient') {
+        // Find the customer ID for this patient
+        fetch("/api/customers", {
+          headers: { Authorization: `Bearer ${localStorage.getItem("visionx_token")}` }
+        })
+        .then(res => res.json())
+        .then(data => {
+          const me = data.find((c: any) => c.email === parsedUser.email);
+          if (me) setCustomerId(me.id.toString());
+          setCustomers(data);
+        });
+      } else {
+        fetch("/api/customers", {
+          headers: { Authorization: `Bearer ${localStorage.getItem("visionx_token")}` }
+        })
+        .then(res => res.json())
+        .then(data => setCustomers(data));
+      }
+    }
     
     fetchHistory();
   }, []);
@@ -221,7 +240,7 @@ export default function AIEyeTest() {
       pd: `${pd}mm`,
       left_eye: { acuity: leftEyeAcuity, ...manualPower.left },
       right_eye: { acuity: rightEyeAcuity, ...manualPower.right },
-      summary: `Manual Snellen Chart test performed at ${distance}ft. PD: ${pd}mm. Left Eye: ${leftEyeAcuity} (S:${manualPower.left.spherical}, C:${manualPower.left.cylindrical}, A:${manualPower.left.axis}), Right Eye: ${rightEyeAcuity} (S:${manualPower.right.spherical}, C:${manualPower.right.cylindrical}, A:${manualPower.right.axis}).`
+      summary: `Manual Snellen Chart test performed at ${distance}ft. PD: ${pd}mm. Left Eye: ${leftEyeAcuity} (S:${manualPower.left.spherical}, C:${manualPower.left.cylindrical}, A:${manualPower.left.axis}, Redness:${manualPower.left.redness}, Irritation:${manualPower.left.irritation}), Right Eye: ${rightEyeAcuity} (S:${manualPower.right.spherical}, C:${manualPower.right.cylindrical}, A:${manualPower.right.axis}, Redness:${manualPower.right.redness}, Irritation:${manualPower.right.irritation}).`
     };
 
     try {
@@ -487,19 +506,21 @@ export default function AIEyeTest() {
               </div>
 
               <div className="mt-6 space-y-4">
-                <div className="space-y-2">
-                  <label className="text-xs font-semibold uppercase tracking-widest text-slate-500">Select Customer</label>
-                    <select 
-                      value={customerId}
-                      onChange={(e) => setCustomerId(e.target.value)}
-                      className="w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
-                    >
-                      <option value="1">Walk-in Customer</option>
-                      {customers.map(c => (
-                        <option key={c.id} value={c.id}>{c.name}</option>
-                      ))}
-                    </select>
-                </div>
+                {user?.role !== 'patient' && (
+                  <div className="space-y-2">
+                    <label className="text-xs font-semibold uppercase tracking-widest text-slate-500">Select Customer</label>
+                      <select 
+                        value={customerId}
+                        onChange={(e) => setCustomerId(e.target.value)}
+                        className="w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+                      >
+                        <option value="1">Walk-in Customer</option>
+                        {customers.map(c => (
+                          <option key={c.id} value={c.id}>{c.name}</option>
+                        ))}
+                      </select>
+                  </div>
+                )}
 
                 <button 
                   onClick={handleDiagnose}
@@ -607,7 +628,36 @@ export default function AIEyeTest() {
                       className="bg-white/5 border border-white/10 rounded-lg p-2 text-xs focus:ring-1 focus:ring-cyan-500 outline-none"
                     />
                   </div>
+                  <div className="grid grid-cols-2 gap-2 mt-2">
+                    <div className="space-y-1">
+                      <label className="text-[8px] font-bold text-slate-500 uppercase">Redness</label>
+                      <select 
+                        value={manualPower.left.redness}
+                        onChange={(e) => setManualPower({ ...manualPower, left: { ...manualPower.left, redness: e.target.value } })}
+                        className="w-full bg-white/5 border border-white/10 rounded-lg p-2 text-[10px] focus:ring-1 focus:ring-cyan-500 outline-none"
+                      >
+                        <option value="None">None</option>
+                        <option value="Mild">Mild</option>
+                        <option value="Moderate">Moderate</option>
+                        <option value="Severe">Severe</option>
+                      </select>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[8px] font-bold text-slate-500 uppercase">Irritation</label>
+                      <select 
+                        value={manualPower.left.irritation}
+                        onChange={(e) => setManualPower({ ...manualPower, left: { ...manualPower.left, irritation: e.target.value } })}
+                        className="w-full bg-white/5 border border-white/10 rounded-lg p-2 text-[10px] focus:ring-1 focus:ring-cyan-500 outline-none"
+                      >
+                        <option value="None">None</option>
+                        <option value="Mild">Mild</option>
+                        <option value="Moderate">Moderate</option>
+                        <option value="Severe">Severe</option>
+                      </select>
+                    </div>
+                  </div>
                 </div>
+
                 <div className="space-y-4">
                   <h4 className="text-xs font-bold uppercase tracking-widest text-cyan-400">Right Eye Power</h4>
                   <div className="grid grid-cols-3 gap-2">
@@ -632,6 +682,34 @@ export default function AIEyeTest() {
                       onChange={(e) => setManualPower({ ...manualPower, right: { ...manualPower.right, axis: e.target.value } })}
                       className="bg-white/5 border border-white/10 rounded-lg p-2 text-xs focus:ring-1 focus:ring-cyan-500 outline-none"
                     />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 mt-2">
+                    <div className="space-y-1">
+                      <label className="text-[8px] font-bold text-slate-500 uppercase">Redness</label>
+                      <select 
+                        value={manualPower.right.redness}
+                        onChange={(e) => setManualPower({ ...manualPower, right: { ...manualPower.right, redness: e.target.value } })}
+                        className="w-full bg-white/5 border border-white/10 rounded-lg p-2 text-[10px] focus:ring-1 focus:ring-cyan-500 outline-none"
+                      >
+                        <option value="None">None</option>
+                        <option value="Mild">Mild</option>
+                        <option value="Moderate">Moderate</option>
+                        <option value="Severe">Severe</option>
+                      </select>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[8px] font-bold text-slate-500 uppercase">Irritation</label>
+                      <select 
+                        value={manualPower.right.irritation}
+                        onChange={(e) => setManualPower({ ...manualPower, right: { ...manualPower.right, irritation: e.target.value } })}
+                        className="w-full bg-white/5 border border-white/10 rounded-lg p-2 text-[10px] focus:ring-1 focus:ring-cyan-500 outline-none"
+                      >
+                        <option value="None">None</option>
+                        <option value="Mild">Mild</option>
+                        <option value="Moderate">Moderate</option>
+                        <option value="Severe">Severe</option>
+                      </select>
+                    </div>
                   </div>
                 </div>
               </div>
