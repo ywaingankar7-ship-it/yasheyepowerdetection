@@ -98,6 +98,13 @@ export default function Login({ onLogin }: LoginProps) {
                 </button>
                 <button 
                   type="button"
+                  onClick={() => { setEmail("staff@visionx.com"); setPassword("staff123"); }}
+                  className="flex-1 py-2 bg-white/5 border border-white/10 rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-blue-500/10 hover:text-blue-400 transition-all"
+                >
+                  Staff
+                </button>
+                <button 
+                  type="button"
                   onClick={() => { setEmail("patient@visionx.ai"); setPassword("patient123"); }}
                   className="flex-1 py-2 bg-white/5 border border-white/10 rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-emerald-500/10 hover:text-emerald-400 transition-all"
                 >

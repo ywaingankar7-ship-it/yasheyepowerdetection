@@ -8,7 +8,13 @@ import {
   Edit2, 
   Trash2, 
   AlertCircle,
-  TrendingDown
+  TrendingDown,
+  ShoppingCart,
+  Eye,
+  X,
+  Camera,
+  CheckCircle2,
+  Loader2
 } from "lucide-react";
 import { InventoryItem } from "../types";
 import { motion, AnimatePresence } from "motion/react";
@@ -19,6 +25,12 @@ export default function Inventory() {
   const [searchTerm, setSearchTerm] = useState("");
   const [filterType, setFilterType] = useState("all");
   const [showModal, setShowModal] = useState(false);
+  const [user, setUser] = useState<any>(null);
+  const [vtoItem, setVtoItem] = useState<InventoryItem | null>(null);
+  const [isVtoOpen, setIsVtoOpen] = useState(false);
+  const [vtoLoading, setVtoLoading] = useState(false);
+  const videoRef = React.useRef<HTMLVideoElement>(null);
+
   const [newItem, setNewItem] = useState({
     brand: "",
     model: "",
@@ -30,6 +42,8 @@ export default function Inventory() {
   });
 
   useEffect(() => {
+    const savedUser = localStorage.getItem("visionx_user");
+    if (savedUser) setUser(JSON.parse(savedUser));
     fetchInventory();
   }, []);
 
@@ -42,6 +56,50 @@ export default function Inventory() {
       setItems(data);
       setLoading(false);
     });
+  };
+
+  const handleAddToCart = async (item: InventoryItem) => {
+    try {
+      const response = await fetch("/api/cart", {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${localStorage.getItem("visionx_token")}` 
+        },
+        body: JSON.stringify({ inventory_id: item.id, quantity: 1 })
+      });
+      if (response.ok) {
+        alert(`${item.brand} ${item.model} added to cart!`);
+      }
+    } catch (err) {
+      console.error("Failed to add to cart", err);
+    }
+  };
+
+  const startVto = async (item: InventoryItem) => {
+    setVtoItem(item);
+    setIsVtoOpen(true);
+    setVtoLoading(true);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } });
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        setVtoLoading(false);
+      }
+    } catch (err) {
+      alert("Camera access denied for Virtual Try-On");
+      setIsVtoOpen(false);
+    }
+  };
+
+  const stopVto = () => {
+    if (videoRef.current && videoRef.current.srcObject) {
+      const tracks = (videoRef.current.srcObject as MediaStream).getTracks();
+      tracks.forEach(track => track.stop());
+      videoRef.current.srcObject = null;
+    }
+    setIsVtoOpen(false);
+    setVtoItem(null);
   };
 
   const handleAdd = async (e: React.FormEvent) => {
@@ -94,17 +152,95 @@ export default function Inventory() {
     <div className="space-y-8">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Inventory Management</h1>
-          <p className="text-slate-400 mt-1">Manage frames, lenses, and optical equipment stock.</p>
+          <h1 className="text-3xl font-bold tracking-tight">
+            {user?.role === 'patient' ? 'Shop Eyewear' : 'Inventory Management'}
+          </h1>
+          <p className="text-slate-400 mt-1">
+            {user?.role === 'patient' ? 'Browse and virtually try on our premium collection.' : 'Manage frames, lenses, and optical equipment stock.'}
+          </p>
         </div>
-        <button 
-          onClick={() => setShowModal(true)}
-          className="gradient-bg px-6 py-3 rounded-xl font-bold flex items-center gap-2 shadow-lg shadow-cyan-500/20"
-        >
-          <Plus className="w-5 h-5" />
-          Add New Item
-        </button>
+        {user?.role === 'admin' && (
+          <button 
+            onClick={() => setShowModal(true)}
+            className="gradient-bg px-6 py-3 rounded-xl font-bold flex items-center gap-2 shadow-lg shadow-cyan-500/20"
+          >
+            <Plus className="w-5 h-5" />
+            Add New Item
+          </button>
+        )}
       </div>
+
+      {/* VTO Modal */}
+      <AnimatePresence>
+        {isVtoOpen && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={stopVto}
+              className="absolute inset-0 bg-slate-950/90 backdrop-blur-sm"
+            />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="relative w-full max-w-4xl glass-card overflow-hidden shadow-2xl border-cyan-500/30"
+            >
+              <div className="flex flex-col md:flex-row h-full">
+                <div className="relative flex-1 bg-black aspect-video md:aspect-auto">
+                  {vtoLoading && (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 text-cyan-400">
+                      <Loader2 className="w-12 h-12 animate-spin" />
+                      <p className="text-sm font-bold uppercase tracking-widest">Initializing AI Try-On...</p>
+                    </div>
+                  )}
+                  <video ref={videoRef} autoPlay playsInline className="w-full h-full object-cover mirror" />
+                  {!vtoLoading && vtoItem && (
+                    <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
+                      <div className="relative w-64 h-32">
+                        <img 
+                          src={vtoItem.image_url || `https://picsum.photos/seed/${vtoItem.id}/400/300`} 
+                          alt="VTO Overlay"
+                          className="w-full h-full object-contain drop-shadow-[0_0_20px_rgba(6,182,212,0.5)]"
+                          referrerPolicy="no-referrer"
+                        />
+                        <div className="absolute -top-10 left-1/2 -translate-x-1/2 bg-cyan-500/20 backdrop-blur-md border border-cyan-500/30 px-3 py-1 rounded-full flex items-center gap-2">
+                          <CheckCircle2 className="w-3 h-3 text-cyan-400" />
+                          <span className="text-[10px] font-bold text-white uppercase tracking-widest">AI Face Tracked</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+                <div className="w-full md:w-80 p-8 flex flex-col justify-between bg-slate-900">
+                  <div>
+                    <div className="flex justify-between items-start mb-6">
+                      <h2 className="text-2xl font-black">{vtoItem?.brand}</h2>
+                      <button onClick={stopVto} className="p-2 hover:bg-white/5 rounded-lg text-slate-500">
+                        <X className="w-6 h-6" />
+                      </button>
+                    </div>
+                    <p className="text-slate-400 mb-2">{vtoItem?.model}</p>
+                    <p className="text-3xl font-black text-cyan-400 mb-8">${vtoItem?.price}</p>
+                  </div>
+                  <div className="space-y-3">
+                    <button 
+                      onClick={() => vtoItem && handleAddToCart(vtoItem)}
+                      className="w-full gradient-bg py-4 rounded-xl font-bold flex items-center justify-center gap-2 shadow-xl shadow-cyan-500/20"
+                    >
+                      <ShoppingCart className="w-5 h-5" /> Add to Cart
+                    </button>
+                    <button onClick={stopVto} className="w-full py-4 rounded-xl font-bold text-slate-400 hover:text-white transition-all">
+                      Close Preview
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       <AnimatePresence>
         {showModal && (
@@ -220,180 +356,239 @@ export default function Inventory() {
         )}
       </AnimatePresence>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="glass-card flex items-center gap-4">
-          <div className="w-12 h-12 bg-cyan-500/10 rounded-xl flex items-center justify-center">
-            <Package className="w-6 h-6 text-cyan-400" />
+      {user?.role === 'admin' && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="glass-card flex items-center gap-4">
+            <div className="w-12 h-12 bg-cyan-500/10 rounded-xl flex items-center justify-center">
+              <Package className="w-6 h-6 text-cyan-400" />
+            </div>
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-widest text-slate-500">Total Items</p>
+              <h3 className="text-xl font-bold">{items.length}</h3>
+            </div>
           </div>
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-widest text-slate-500">Total Items</p>
-            <h3 className="text-xl font-bold">{items.length}</h3>
+          <div className="glass-card flex items-center gap-4">
+            <div className="w-12 h-12 bg-amber-500/10 rounded-xl flex items-center justify-center">
+              <AlertCircle className="w-6 h-6 text-amber-400" />
+            </div>
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-widest text-slate-500">Low Stock</p>
+              <h3 className="text-xl font-bold">{items.filter(i => i.stock < 5).length}</h3>
+            </div>
           </div>
-        </div>
-        <div className="glass-card flex items-center gap-4">
-          <div className="w-12 h-12 bg-amber-500/10 rounded-xl flex items-center justify-center">
-            <AlertCircle className="w-6 h-6 text-amber-400" />
-          </div>
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-widest text-slate-500">Low Stock</p>
-            <h3 className="text-xl font-bold">{items.filter(i => i.stock < 5).length}</h3>
-          </div>
-        </div>
-        <div className="glass-card flex items-center gap-4">
-          <div className="w-12 h-12 bg-rose-500/10 rounded-xl flex items-center justify-center">
-            <TrendingDown className="w-6 h-6 text-rose-400" />
-          </div>
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-widest text-slate-500">Out of Stock</p>
-            <h3 className="text-xl font-bold">{items.filter(i => i.stock === 0).length}</h3>
-          </div>
-        </div>
-      </div>
-
-      <div className="glass-card overflow-hidden">
-        <div className="p-6 border-b border-white/10 flex flex-col md:flex-row gap-4 justify-between">
-          <div className="relative flex-1 max-w-md">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
-            <input 
-              type="text" 
-              placeholder="Search by brand or model..." 
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full bg-white/5 border border-white/10 rounded-xl py-2 pl-10 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
-            />
-          </div>
-          <div className="flex gap-3">
-            <div className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-xl px-3">
-              <Filter className="w-4 h-4 text-slate-500" />
-              <select 
-                value={filterType}
-                onChange={(e) => setFilterType(e.target.value)}
-                className="bg-transparent text-sm focus:outline-none py-2"
-              >
-                <option value="all">All Types</option>
-                <option value="frame">Frames</option>
-                <option value="sunglasses">Sunglasses</option>
-                <option value="lens">Lenses</option>
-                <option value="accessory">Accessories</option>
-              </select>
+          <div className="glass-card flex items-center gap-4">
+            <div className="w-12 h-12 bg-rose-500/10 rounded-xl flex items-center justify-center">
+              <TrendingDown className="w-6 h-6 text-rose-400" />
+            </div>
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-widest text-slate-500">Out of Stock</p>
+              <h3 className="text-xl font-bold">{items.filter(i => i.stock === 0).length}</h3>
             </div>
           </div>
         </div>
+      )}
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-left">
-            <thead>
-              <tr className="text-xs font-semibold uppercase tracking-widest text-slate-500 border-b border-white/10">
-                <th className="px-6 py-4">Item Details</th>
-                <th className="px-6 py-4">Type</th>
-                <th className="px-6 py-4">Price</th>
-                <th className="px-6 py-4">Stock</th>
-                <th className="px-6 py-4">Status</th>
-                <th className="px-6 py-4 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-white/5">
-              {loading ? (
-                [1,2,3].map(i => (
-                  <tr key={i} className="animate-pulse">
-                    <td colSpan={6} className="px-6 py-8 h-12 bg-white/5"></td>
-                  </tr>
-                ))
-              ) : filteredItems.length > 0 ? (
-                filteredItems.map((item) => (
-                  <tr key={item.id} className="hover:bg-white/5 transition-colors group">
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-4">
-                        <div className="w-16 h-16 bg-white/5 rounded-xl flex items-center justify-center overflow-hidden border border-white/10 group-hover:border-cyan-500/50 transition-colors">
-                          {item.image_url ? (
-                            <img src={item.image_url} alt={item.model} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                          ) : (
-                            <Package className="w-6 h-6 text-slate-500" />
-                          )}
-                        </div>
-                        <div>
-                          <p className="font-bold text-sm text-white group-hover:text-cyan-400 transition-colors">{item.brand}</p>
-                          <p className="text-xs text-slate-500">{item.model}</p>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <span className={`px-2 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider ${
-                        item.type === 'frame' ? 'bg-blue-400/10 text-blue-400' : 
-                        item.type === 'sunglasses' ? 'bg-amber-400/10 text-amber-400' :
-                        item.type === 'lens' ? 'bg-violet-400/10 text-violet-400' :
-                        'bg-slate-400/10 text-slate-400'
-                      }`}>
-                        {item.type}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 font-mono text-sm">${item.price.toFixed(2)}</td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-bold">{item.stock}</span>
-                        <div className="w-16 h-1.5 bg-white/5 rounded-full overflow-hidden">
-                          <div 
-                            className={`h-full rounded-full ${
-                              item.stock > 10 ? 'bg-emerald-500' : item.stock > 0 ? 'bg-amber-500' : 'bg-rose-500'
-                            }`}
-                            style={{ width: `${Math.min(item.stock * 5, 100)}%` }}
-                          />
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      {item.stock > 10 ? (
-                        <span className="text-xs text-emerald-400 flex items-center gap-1">
-                          <div className="w-1.5 h-1.5 rounded-full bg-emerald-400" /> In Stock
-                        </span>
-                      ) : item.stock > 0 ? (
-                        <span className="text-xs text-amber-400 flex items-center gap-1">
-                          <div className="w-1.5 h-1.5 rounded-full bg-amber-400" /> Low Stock
-                        </span>
-                      ) : (
-                        <span className="text-xs text-rose-400 flex items-center gap-1">
-                          <div className="w-1.5 h-1.5 rounded-full bg-rose-400" /> Out of Stock
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-6 py-4 text-right">
-                      <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button 
-                          onClick={() => alert("Edit functionality coming soon!")}
-                          className="p-2 hover:bg-white/10 rounded-lg text-slate-400 hover:text-cyan-400 transition-all"
-                        >
-                          <Edit2 className="w-4 h-4" />
-                        </button>
-                        <button 
-                          onClick={() => handleDelete(item.id)}
-                          className="p-2 hover:bg-rose-400/10 rounded-lg text-slate-400 hover:text-rose-400 transition-all"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                        <button 
-                          onClick={() => alert("More options coming soon!")}
-                          className="p-2 hover:bg-white/10 rounded-lg text-slate-400 transition-all"
-                        >
-                          <MoreVertical className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan={6} className="px-6 py-12 text-center">
-                    <div className="flex flex-col items-center gap-2 opacity-50">
-                      <Package className="w-12 h-12" />
-                      <p>No inventory items found matching your criteria.</p>
-                    </div>
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+      <div className="flex flex-col md:flex-row gap-4 justify-between">
+        <div className="relative flex-1 max-w-md">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+          <input 
+            type="text" 
+            placeholder="Search by brand or model..." 
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full bg-white/5 border border-white/10 rounded-xl py-3 pl-10 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+          />
+        </div>
+        <div className="flex gap-3">
+          <div className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-xl px-3">
+            <Filter className="w-4 h-4 text-slate-500" />
+            <select 
+              value={filterType}
+              onChange={(e) => setFilterType(e.target.value)}
+              className="bg-transparent text-sm focus:outline-none py-3"
+            >
+              <option value="all">All Types</option>
+              <option value="frame">Frames</option>
+              <option value="sunglasses">Sunglasses</option>
+              <option value="lens">Lenses</option>
+              <option value="accessory">Accessories</option>
+            </select>
+          </div>
         </div>
       </div>
+
+      {user?.role === 'patient' ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          {filteredItems.map((item) => (
+            <motion.div 
+              key={item.id}
+              layout
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="glass-card overflow-hidden group"
+            >
+              <div className="aspect-[4/3] bg-white/5 relative overflow-hidden">
+                <img 
+                  src={item.image_url || `https://picsum.photos/seed/${item.id}/400/300`} 
+                  alt={item.model}
+                  className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+                  referrerPolicy="no-referrer"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-4">
+                  <div className="flex gap-2 w-full">
+                    <button 
+                      onClick={() => handleAddToCart(item)}
+                      className="flex-1 bg-cyan-500 py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-2 hover:bg-cyan-400 transition-all"
+                    >
+                      <ShoppingCart className="w-3 h-3" /> Add to Cart
+                    </button>
+                    {(item.type === 'frame' || item.type === 'sunglasses') && (
+                      <button 
+                        onClick={() => startVto(item)}
+                        className="flex-1 bg-white/10 backdrop-blur-md py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-2 hover:bg-white/20 transition-all"
+                      >
+                        <Eye className="w-3 h-3" /> Try On
+                      </button>
+                    )}
+                  </div>
+                </div>
+                <div className="absolute top-3 left-3 px-2 py-1 bg-slate-950/60 backdrop-blur-md rounded-lg text-[10px] font-bold uppercase tracking-widest text-cyan-400 border border-white/10">
+                  {item.type}
+                </div>
+              </div>
+              <div className="p-4">
+                <div className="flex justify-between items-start mb-1">
+                  <h3 className="font-bold text-lg truncate flex-1">{item.brand}</h3>
+                  <span className="text-cyan-400 font-black">${item.price}</span>
+                </div>
+                <p className="text-sm text-slate-400 mb-4 truncate">{item.model}</p>
+                <div className="flex items-center gap-2">
+                  <div className={`w-2 h-2 rounded-full ${item.stock > 10 ? 'bg-emerald-400' : item.stock > 0 ? 'bg-amber-400' : 'bg-rose-400'}`} />
+                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+                    {item.stock > 0 ? `${item.stock} in stock` : 'Out of stock'}
+                  </span>
+                </div>
+              </div>
+            </motion.div>
+          ))}
+        </div>
+      ) : (
+        <div className="glass-card overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left">
+              <thead>
+                <tr className="text-xs font-semibold uppercase tracking-widest text-slate-500 border-b border-white/10">
+                  <th className="px-6 py-4">Item Details</th>
+                  <th className="px-6 py-4">Type</th>
+                  <th className="px-6 py-4">Price</th>
+                  <th className="px-6 py-4">Stock</th>
+                  <th className="px-6 py-4">Status</th>
+                  <th className="px-6 py-4 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-white/5">
+                {loading ? (
+                  [1,2,3].map(i => (
+                    <tr key={i} className="animate-pulse">
+                      <td colSpan={6} className="px-6 py-8 h-12 bg-white/5"></td>
+                    </tr>
+                  ))
+                ) : filteredItems.length > 0 ? (
+                  filteredItems.map((item) => (
+                    <tr key={item.id} className="hover:bg-white/5 transition-colors group">
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-4">
+                          <div className="w-16 h-16 bg-white/5 rounded-xl flex items-center justify-center overflow-hidden border border-white/10 group-hover:border-cyan-500/50 transition-colors">
+                            {item.image_url ? (
+                              <img src={item.image_url} alt={item.model} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                            ) : (
+                              <Package className="w-6 h-6 text-slate-500" />
+                            )}
+                          </div>
+                          <div>
+                            <p className="font-bold text-sm text-white group-hover:text-cyan-400 transition-colors">{item.brand}</p>
+                            <p className="text-xs text-slate-500">{item.model}</p>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className={`px-2 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider ${
+                          item.type === 'frame' ? 'bg-blue-400/10 text-blue-400' : 
+                          item.type === 'sunglasses' ? 'bg-amber-400/10 text-amber-400' :
+                          item.type === 'lens' ? 'bg-violet-400/10 text-violet-400' :
+                          'bg-slate-400/10 text-slate-400'
+                        }`}>
+                          {item.type}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 font-mono text-sm">${item.price.toFixed(2)}</td>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-bold">{item.stock}</span>
+                          <div className="w-16 h-1.5 bg-white/5 rounded-full overflow-hidden">
+                            <div 
+                              className={`h-full rounded-full ${
+                                item.stock > 10 ? 'bg-emerald-500' : item.stock > 0 ? 'bg-amber-500' : 'bg-rose-500'
+                              }`}
+                              style={{ width: `${Math.min(item.stock * 5, 100)}%` }}
+                            />
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        {item.stock > 10 ? (
+                          <span className="text-xs text-emerald-400 flex items-center gap-1">
+                            <div className="w-1.5 h-1.5 rounded-full bg-emerald-400" /> In Stock
+                          </span>
+                        ) : item.stock > 0 ? (
+                          <span className="text-xs text-amber-400 flex items-center gap-1">
+                            <div className="w-1.5 h-1.5 rounded-full bg-amber-400" /> Low Stock
+                          </span>
+                        ) : (
+                          <span className="text-xs text-rose-400 flex items-center gap-1">
+                            <div className="w-1.5 h-1.5 rounded-full bg-rose-400" /> Out of Stock
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-6 py-4 text-right">
+                        <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button 
+                            onClick={() => alert("Edit functionality coming soon!")}
+                            className="p-2 hover:bg-white/10 rounded-lg text-slate-400 hover:text-cyan-400 transition-all"
+                          >
+                            <Edit2 className="w-4 h-4" />
+                          </button>
+                          <button 
+                            onClick={() => handleDelete(item.id)}
+                            className="p-2 hover:bg-rose-400/10 rounded-lg text-slate-400 hover:text-rose-400 transition-all"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                          <button 
+                            onClick={() => alert("More options coming soon!")}
+                            className="p-2 hover:bg-white/10 rounded-lg text-slate-400 transition-all"
+                          >
+                            <MoreVertical className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={6} className="px-6 py-12 text-center">
+                      <div className="flex flex-col items-center gap-2 opacity-50">
+                        <Package className="w-12 h-12" />
+                        <p>No inventory items found matching your criteria.</p>
+                      </div>
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

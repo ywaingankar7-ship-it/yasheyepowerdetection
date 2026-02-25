@@ -35,20 +35,33 @@ export default function Dashboard() {
     const savedUser = localStorage.getItem("visionx_user");
     if (savedUser) setUser(JSON.parse(savedUser));
 
+    const token = localStorage.getItem("visionx_token");
+    if (!token) {
+      navigate("/login");
+      return;
+    }
+
     fetch("/api/analytics", {
-      headers: { Authorization: `Bearer ${localStorage.getItem("visionx_token")}` }
+      headers: { Authorization: `Bearer ${token}` }
     })
-    .then(res => res.json())
+    .then(res => {
+      if (!res.ok) throw new Error("Failed to fetch analytics");
+      return res.json();
+    })
     .then(data => {
       setData(data);
       setLoading(false);
+    })
+    .catch(err => {
+      console.error(err);
+      setLoading(false);
     });
-  }, []);
+  }, [navigate]);
 
-  if (loading || !user) return <div className="animate-pulse space-y-8">
-    <div className="h-32 bg-white/5 rounded-2xl"></div>
-    <div className="grid grid-cols-4 gap-6">
-      {[1,2,3,4].map(i => <div key={i} className="h-24 bg-white/5 rounded-2xl"></div>)}
+  if (loading || !user || !data || !data.stats) return <div className="min-h-screen flex items-center justify-center bg-slate-950">
+    <div className="flex flex-col items-center gap-4">
+      <div className="w-16 h-16 border-4 border-cyan-500 border-t-transparent rounded-full animate-spin"></div>
+      <p className="text-slate-400 animate-pulse font-medium">Loading Intelligence Hub...</p>
     </div>
   </div>;
 

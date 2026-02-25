@@ -2,6 +2,7 @@ import React from "react";
 import { Outlet } from "react-router-dom";
 import Sidebar from "./Sidebar";
 import Header from "./Header";
+import GeminiChatbot from "./GeminiChatbot";
 import { User } from "../types";
 import { motion, AnimatePresence } from "motion/react";
 
@@ -30,6 +31,7 @@ export default function Layout({ user, onLogout }: LayoutProps) {
           </AnimatePresence>
         </main>
       </div>
+      <GeminiChatbot />
     </div>
   );
 }

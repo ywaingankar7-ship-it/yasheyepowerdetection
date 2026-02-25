@@ -7,11 +7,12 @@ import SnellenChart from "../components/SnellenChart";
 import { GoogleGenAI } from "@google/genai";
 
 export default function AIEyeTest() {
-  const [mode, setMode] = useState<"ai" | "manual" | "history">("ai");
+  const [mode, setMode] = useState<"ai" | "manual" | "history" | "face_shape">("ai");
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<any>(null);
+  const [faceShapeResult, setFaceShapeResult] = useState<any>(null);
   const [history, setHistory] = useState<any[]>([]);
   const [customerId, setCustomerId] = useState("1");
   const [customers, setCustomers] = useState<any[]>([]);
@@ -133,6 +134,8 @@ export default function AIEyeTest() {
   const handleDiagnose = async () => {
     if (!file) return;
     setLoading(true);
+    setResult(null);
+    setFaceShapeResult(null);
 
     try {
       const apiKey = process.env.GEMINI_API_KEY || (process.env as any).API_KEY;
@@ -155,73 +158,89 @@ export default function AIEyeTest() {
 
       const base64Image = await base64Promise;
 
-      const prompt = `You are a world-class ophthalmologist and optical expert. 
-      Analyze the provided eye image with extreme precision. 
-      
-      Your task is to provide a comprehensive optical diagnosis and prescription.
-      
-      REQUIRED ANALYSIS:
-      1. Refractive Error Detection:
-         - Myopia (Nearsightedness)
-         - Hyperopia (Farsightedness)
-         - Astigmatism
-      2. Severity Level Prediction: (Mild, Moderate, Severe)
-      3. Refractive Power (OD - Right Eye, OS - Left Eye):
-         - Spherical (S): Must include sign (+ for hyperopia, - for myopia). e.g., "-2.50", "+1.75".
-         - Cylindrical (C): Must include sign. e.g., "-0.75", "+0.25".
-         - Axis (A): Degrees from 0 to 180.
-      4. Clinical Observations:
-         - Redness: Level (None, Mild, Moderate, Severe).
-         - Dryness: Status (Absent, Mild, Chronic).
-         - Clarity: Status of the cornea and lens (Clear, Cloudy, Hazy).
-      5. Pupillary Distance (PD): Estimate the distance between pupils in mm (e.g., "63mm").
-      6. Abnormalities: List any detected conditions (e.g., "Slight Conjunctivitis", "Early Cataract signs", "Healthy").
-      7. Confidence Level: 0-100.
-      8. Professional Summary: A detailed explanation of the findings and recommended next steps.
-      
-      Return ONLY a valid JSON object following this schema:
-      {
-        "left_eye": { "spherical": string, "cylindrical": string, "axis": number, "redness": string, "dryness": string, "clarity": string, "severity": string },
-        "right_eye": { "spherical": string, "cylindrical": string, "axis": number, "redness": string, "dryness": string, "clarity": string, "severity": string },
-        "conditions": string[],
-        "pd": string,
-        "abnormalities": string[],
-        "confidence_level": number,
-        "summary": string
-      }`;
+      if (mode === "face_shape") {
+        const response = await ai.models.generateContent({
+          model,
+          contents: [
+            {
+              parts: [
+                { text: "Analyze the face shape in this image (e.g., Oval, Square, Round, Heart, Diamond). Provide the face shape and recommend 3 specific styles of eyewear frames that would look best. Return as JSON with keys: faceShape, recommendations (array of strings), and explanation." },
+                { inlineData: { data: base64Image, mimeType: file.type } }
+              ]
+            }
+          ],
+          config: { responseMimeType: "application/json" }
+        });
+        setFaceShapeResult(JSON.parse(response.text || "{}"));
+      } else {
+        const prompt = `You are a world-class ophthalmologist and optical expert. 
+        Analyze the provided eye image with extreme precision. 
+        
+        Your task is to provide a comprehensive optical diagnosis and prescription.
+        
+        REQUIRED ANALYSIS:
+        1. Refractive Error Detection:
+           - Myopia (Nearsightedness)
+           - Hyperopia (Farsightedness)
+           - Astigmatism
+        2. Severity Level Prediction: (Mild, Moderate, Severe)
+        3. Refractive Power (OD - Right Eye, OS - Left Eye):
+           - Spherical (S): Must include sign (+ for hyperopia, - for myopia). e.g., "-2.50", "+1.75".
+           - Cylindrical (C): Must include sign. e.g., "-0.75", "+0.25".
+           - Axis (A): Degrees from 0 to 180.
+        4. Clinical Observations:
+           - Redness: Level (None, Mild, Moderate, Severe).
+           - Dryness: Status (Absent, Mild, Chronic).
+           - Clarity: Status of the cornea and lens (Clear, Cloudy, Hazy).
+        5. Pupillary Distance (PD): Estimate the distance between pupils in mm (e.g., "63mm").
+        6. Abnormalities: List any detected conditions (e.g., "Slight Conjunctivitis", "Early Cataract signs", "Healthy").
+        7. Confidence Level: 0-100.
+        8. Professional Summary: A detailed explanation of the findings and recommended next steps.
+        
+        Return ONLY a valid JSON object following this schema:
+        {
+          "left_eye": { "spherical": string, "cylindrical": string, "axis": number, "redness": string, "dryness": string, "clarity": string, "severity": string },
+          "right_eye": { "spherical": string, "cylindrical": string, "axis": number, "redness": string, "dryness": string, "clarity": string, "severity": string },
+          "conditions": string[],
+          "pd": string,
+          "abnormalities": string[],
+          "confidence_level": number,
+          "summary": string
+        }`;
 
-      const response = await ai.models.generateContent({
-        model,
-        contents: [
-          {
-            parts: [
-              { text: prompt },
-              { inlineData: { data: base64Image, mimeType: file.type } }
-            ]
+        const response = await ai.models.generateContent({
+          model,
+          contents: [
+            {
+              parts: [
+                { text: prompt },
+                { inlineData: { data: base64Image, mimeType: file.type } }
+              ]
+            }
+          ],
+          config: { 
+            responseMimeType: "application/json",
+            temperature: 0.1 // Even lower for maximum consistency
           }
-        ],
-        config: { 
-          responseMimeType: "application/json",
-          temperature: 0.1 // Even lower for maximum consistency
-        }
-      });
+        });
 
-      const results = JSON.parse(response.text || "{}");
-      
-      // Save results to backend
-      await fetch("/api/customers/test", {
-        method: "POST",
-        headers: { 
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${localStorage.getItem("visionx_token")}` 
-        },
-        body: JSON.stringify({
-          customer_id: customerId,
-          results: results
-        }),
-      });
+        const results = JSON.parse(response.text || "{}");
+        
+        // Save results to backend
+        await fetch("/api/customers/test", {
+          method: "POST",
+          headers: { 
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${localStorage.getItem("visionx_token")}` 
+          },
+          body: JSON.stringify({
+            customer_id: customerId,
+            results: results
+          }),
+        });
 
-      setResult(results);
+        setResult(results);
+      }
     } catch (err: any) {
       console.error("Diagnosis failed:", err);
       alert(err.message || "Diagnosis failed. Please check your connection and API key.");
@@ -371,7 +390,7 @@ export default function AIEyeTest() {
         </div>
         <div className="flex gap-2 bg-white/5 p-1 rounded-2xl border border-white/10">
           <button 
-            onClick={() => { setMode("ai"); setResult(null); }}
+            onClick={() => { setMode("ai"); setResult(null); setFaceShapeResult(null); }}
             className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
               mode === "ai" ? "gradient-bg text-white shadow-lg shadow-cyan-500/20" : "text-slate-400 hover:text-white"
             }`}
@@ -380,7 +399,16 @@ export default function AIEyeTest() {
             AI Diagnosis
           </button>
           <button 
-            onClick={() => { setMode("manual"); setResult(null); }}
+            onClick={() => { setMode("face_shape"); setResult(null); setFaceShapeResult(null); }}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
+              mode === "face_shape" ? "gradient-bg text-white shadow-lg shadow-cyan-500/20" : "text-slate-400 hover:text-white"
+            }`}
+          >
+            <Scan className="w-4 h-4" />
+            Face Shape
+          </button>
+          <button 
+            onClick={() => { setMode("manual"); setResult(null); setFaceShapeResult(null); }}
             className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
               mode === "manual" ? "gradient-bg text-white shadow-lg shadow-cyan-500/20" : "text-slate-400 hover:text-white"
             }`}
@@ -389,7 +417,7 @@ export default function AIEyeTest() {
             Manual Test
           </button>
           <button 
-            onClick={() => { setMode("history"); setResult(null); }}
+            onClick={() => { setMode("history"); setResult(null); setFaceShapeResult(null); }}
             className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
               mode === "history" ? "gradient-bg text-white shadow-lg shadow-cyan-500/20" : "text-slate-400 hover:text-white"
             }`}
@@ -453,11 +481,11 @@ export default function AIEyeTest() {
                 )}
               </div>
             </div>
-          ) : mode === "ai" ? (
+          ) : (mode === "ai" || mode === "face_shape") ? (
             <div className="glass-card">
               <h3 className="font-bold mb-4 flex items-center gap-2">
                 <Upload className="w-5 h-5 text-cyan-400" />
-                Upload Eye Image
+                {mode === "ai" ? "Upload Eye Image" : "Upload Face Image"}
               </h3>
               <div 
                 {...getRootProps()} 
@@ -492,7 +520,7 @@ export default function AIEyeTest() {
                       <Upload className="w-8 h-8 text-slate-400" />
                     </div>
                     <div>
-                      <p className="text-sm font-bold">Drag & drop eye image here</p>
+                      <p className="text-sm font-bold">Drag & drop {mode === "ai" ? "eye" : "face"} image here</p>
                       <p className="text-xs text-slate-500 mt-1">Supports JPG, PNG (Max 5MB)</p>
                     </div>
                     <button 
@@ -535,7 +563,7 @@ export default function AIEyeTest() {
                   ) : (
                     <>
                       <Activity className="w-5 h-5" />
-                      Start AI Diagnosis
+                      {mode === "ai" ? "Start AI Diagnosis" : "Analyze Face Shape"}
                     </>
                   )}
                 </button>
@@ -920,6 +948,43 @@ export default function AIEyeTest() {
                 >
                   <Download className="w-5 h-5" />
                   Download Prescription PDF
+                </button>
+              </motion.div>
+            ) : faceShapeResult ? (
+              <motion.div 
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                className="glass-card space-y-6"
+              >
+                <div className="p-6 bg-cyan-500/10 border border-cyan-500/20 rounded-2xl text-center">
+                  <p className="text-xs font-bold text-cyan-400 uppercase tracking-widest mb-1">Your Face Shape</p>
+                  <h3 className="text-3xl font-black text-white">{faceShapeResult.faceShape}</h3>
+                </div>
+
+                <div>
+                  <h3 className="text-sm font-bold text-slate-500 uppercase tracking-widest mb-3">Why this shape?</h3>
+                  <p className="text-slate-300 leading-relaxed text-sm">{faceShapeResult.explanation}</p>
+                </div>
+
+                <div>
+                  <h3 className="text-sm font-bold text-slate-500 uppercase tracking-widest mb-3">Recommended Styles</h3>
+                  <div className="grid grid-cols-1 gap-3">
+                    {faceShapeResult.recommendations.map((rec: string, i: number) => (
+                      <div key={i} className="p-4 bg-white/5 border border-white/10 rounded-xl flex items-center gap-3">
+                        <div className="w-8 h-8 bg-cyan-500/10 rounded-lg flex items-center justify-center text-cyan-400 font-bold">
+                          {i + 1}
+                        </div>
+                        <span className="text-sm font-bold">{rec}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <button 
+                  onClick={() => window.location.href = '/inventory'}
+                  className="w-full py-3 border border-cyan-500/30 text-cyan-400 rounded-xl font-bold text-sm hover:bg-cyan-500/10 transition-all"
+                >
+                  Shop Recommended Styles
                 </button>
               </motion.div>
             ) : (
